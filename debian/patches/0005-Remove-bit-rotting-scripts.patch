@@ -1,0 +1,1926 @@
+From: Eric B Munson <emunson@mgebm.net>
+Date: Mon, 14 Dec 2015 21:02:55 -0500
+Subject: Remove bit-rotting scripts
+
+These scripts are either massively out of date, or depend on scripts
+that are massively out of date.
+
+Signed-off-by: Eric B Munson <emunson@mgebm.net>
+Acked-by: Mel Gorman <mel@csn.ul.ie>
+Cc: Mel Gorman <mel@csn.ul.ie>
+---
+ Makefile                |  21 +-
+ TLBC/DataCollect.pm     |  55 ----
+ TLBC/OpCollect.pm       | 185 -------------
+ TLBC/PerfCollect.pm     | 144 ----------
+ TLBC/Report.pm          |  58 ----
+ contrib/tlbmiss_cost.sh | 693 ------------------------------------------------
+ cpupcstat               | 337 -----------------------
+ man/tlbmiss_cost.sh.8   |  85 ------
+ oprofile_map_events.pl  | 151 -----------
+ oprofile_start.sh       |  85 ------
+ 10 files changed, 1 insertion(+), 1813 deletions(-)
+ delete mode 100644 TLBC/DataCollect.pm
+ delete mode 100644 TLBC/OpCollect.pm
+ delete mode 100644 TLBC/PerfCollect.pm
+ delete mode 100644 TLBC/Report.pm
+ delete mode 100755 contrib/tlbmiss_cost.sh
+ delete mode 100755 cpupcstat
+ delete mode 100644 man/tlbmiss_cost.sh.8
+ delete mode 100755 oprofile_map_events.pl
+ delete mode 100755 oprofile_start.sh
+
+diff --git a/Makefile b/Makefile
+index 2dc501f..51267cc 100644
+--- a/Makefile
++++ b/Makefile
+@@ -5,9 +5,7 @@ LIBOBJS = hugeutils.o version.o init.o morecore.o debug.o alloc.o shm.o kernel-f
+ LIBPUOBJS = init_privutils.o debug.o hugeutils.o kernel-features.o
+ INSTALL_OBJ_LIBS = libhugetlbfs.so libhugetlbfs.a libhugetlbfs_privutils.so
+ BIN_OBJ_DIR=obj
+-PM_OBJ_DIR=TLBC
+ INSTALL_BIN = hugectl hugeedit hugeadm pagesize
+-INSTALL_SCRIPT = cpupcstat oprofile_map_events.pl oprofile_start.sh
+ INSTALL_HELPER = huge_page_setup_helper.py
+ INSTALL_PERLMOD = DataCollect.pm OpCollect.pm PerfCollect.pm Report.pm
+ INSTALL_HEADERS = hugetlbfs.h
+@@ -192,11 +190,6 @@ LDSCRIPTDIR = $(PREFIX)/share/libhugetlbfs/ldscripts
+ BINDIR = $(PREFIX)/share/libhugetlbfs
+ EXEDIR = $(PREFIX)/bin
+ DOCDIR = $(PREFIX)/share/doc/libhugetlbfs
+-ifdef CC32
+-PMDIR = $(LIBDIR32)/perl5/TLBC
+-else
+-PMDIR = $(LIBDIR64)/perl5/TLBC
+-endif
+ MANDIR1 = $(PREFIX)/share/man/man1
+ MANDIR3 = $(PREFIX)/share/man/man3
+ MANDIR7 = $(PREFIX)/share/man/man7
+@@ -461,19 +454,7 @@ install-bin:
+ 	for x in $(INSTALL_BIN); do \
+ 		$(INSTALL) -m 755 $(BIN_OBJ_DIR)/$$x $(DESTDIR)$(EXEDIR); done
+ 
+-install-stat: install-perlmod
+-	@$(VECHO) INSTALL_SCRIPT $(DESTDIR)$(EXEDIR)
+-	$(INSTALL) -d $(DESTDIR)$(EXEDIR)
+-	for x in $(INSTALL_SCRIPT); do \
+-		$(INSTALL) -m 755 $$x $(DESTDIR)$(EXEDIR); done
+-
+-install-perlmod:
+-	@$(VECHO) INSTALL_PERLMOD $(DESTDIR)$(PMDIR)
+-	$(INSTALL) -d $(DESTDIR)$(PMDIR)
+-	for x in $(INSTALL_PERLMOD); do \
+-		$(INSTALL) -m 644 $(PM_OBJ_DIR)/$$x $(DESTDIR)$(PMDIR); done
+-
+-install: install-libs install-bin install-man install-stat
++install: install-libs install-bin install-man
+ 
+ install-helper:
+ 	@$(VECHO) INSTALL_HELPER $(DESTDIR)$(EXEDIR)
+diff --git a/TLBC/DataCollect.pm b/TLBC/DataCollect.pm
+deleted file mode 100644
+index 631fe74..0000000
+--- a/TLBC/DataCollect.pm
++++ /dev/null
+@@ -1,55 +0,0 @@
+-#
+-# DataCollect.pm
+-#
+-# This module is the base class for DTLB data collection.  This class is a
+-# interface class only, to add a new collection method inherit from this
+-# class and use it in calc_missrate.pl
+-# Licensed under LGPL 2.1 as packaged with libhugetlbfs
+-# (c) Eric Munson 2009
+-
+-package TLBC::DataCollect;
+-
+-use warnings;
+-use strict;
+-use Carp;
+-use base;
+-
+-sub new()
+-{
+-}
+-
+-##
+-# The setup method should take care of setting up the data collector for
+-# collecting event data.  This method takes no args and returns $self
+-
+-sub setup()
+-{
+-}
+-
+-##
+-# This method should the return the total event count as of its
+-# invocation.  This method takes no args and it returns the total number
+-# of events.
+-
+-sub get_current_eventcount()
+-{
+-}
+-
+-##
+-# This method will read the counter information from the data source.
+-# This was separated from get_current_eventcount to provide a logical
+-# way of handling multiple events.
+-
+-sub read_eventcount()
+-{
+-}
+-
+-##
+-# The shutdown method should stop the data collection and do any clean up
+-# necessary.  This method takes no args and returns $self
+-
+-sub shutdown()
+-{
+-}
+-
+-1;
+diff --git a/TLBC/OpCollect.pm b/TLBC/OpCollect.pm
+deleted file mode 100644
+index 6ec477f..0000000
+--- a/TLBC/OpCollect.pm
++++ /dev/null
+@@ -1,185 +0,0 @@
+-#
+-# OpCollect.pm
+-#
+-# This module contains all the setup, data collection, and cleanup methods
+-# for collecting CPU performance counter information from oprofile.
+-# Licensed under LGPL 2.1 as packaged with libhugetlbfs
+-# (c) Eric Munson 2009
+-
+-package TLBC::OpCollect;
+-
+-use warnings;
+-use strict;
+-use Carp;
+-
+-use FindBin qw($Bin);
+-use lib "$Bin/lib";
+-use TLBC::DataCollect;
+-
+-our @ISA = qw(TLBC::DataCollect);
+-
+-my $reference;
+-my $report;
+-my (%event_map, %lowlevel);
+-my (%event_col_map, %event_name);
+-
+-#use interface 'DataCollect';
+-
+-sub _clear_oprofile()
+-{
+-	my $self = shift;
+-	system("opcontrol --reset > /dev/null 2>&1");
+-	system("opcontrol --stop > /dev/null 2>&1");
+-	system("opcontrol --reset > /dev/null 2>&1");
+-	system("opcontrol --deinit > /dev/null 2>&1");
+-	return $self;
+-}
+-
+-sub _get_event()
+-{
+-	my $self = shift;
+-	my $event = shift;
+-	my $lowlevel_event;
+-
+-	$lowlevel_event = `$Bin/oprofile_map_events.pl --event $event 2>/dev/null`;
+-	chomp($lowlevel_event);
+-	if ($lowlevel_event eq "" || $lowlevel_event !~ /^[A-Z0-9_]+:[0-9]+/) {
+-		die "Unable to find $event event for this CPU\n";
+-	}
+-	$event_map{$event} = $lowlevel_event;
+-	return $self;
+-}
+-
+-sub _setup_oprofile()
+-{
+-	my $self = shift;
+-	my $vmlinux = shift;
+-	my $refEvents = shift;
+-	my $cmd = "$Bin/oprofile_start.sh --sample-cycle-factor 6 --sample-event-factor 2 --vmlinux=$vmlinux ";
+-	foreach my $event (@{$refEvents}) {
+-		$cmd .= " --event=$event";
+-		$self->_get_event($event);
+-	}
+-	$cmd .= " > /dev/null 2>&1";
+-	system($cmd) == 0 or return 0;
+-	return $self;
+-}
+-
+-sub new()
+-{
+-	my $class = shift;
+-	if ($reference) {
+-		return $reference;
+-	}
+-
+-	$reference = {@_};
+-	bless($reference, $class);
+-	return $reference;
+-}
+-
+-sub setup()
+-{
+-	my $self = shift;
+-	my $vmlinux = shift;
+-	my $refEvents = shift;
+-	$self->_clear_oprofile();
+-	return $self->_setup_oprofile($vmlinux, $refEvents);
+-}
+-
+-sub samples()
+-{
+-	my $self = shift;
+-	my $event = shift;
+-	my $count = 0;
+-	my $lowlevel;
+-	my @vals;
+-	$lowlevel = $event_map{$event};
+-	if (!$lowlevel) {
+-		die "Unable to locate count and event for $event for this CPU.\n";
+-	}
+-	@vals = split(/:/, $lowlevel);
+-	return $vals[1];
+-}
+-
+-sub _get_column()
+-{
+-	my $self = shift;
+-	my $event = shift;
+-	my @results;
+-	my $line;
+-	my $col = $event_col_map{$event};
+-
+-	if ($col) {
+-		return $col;
+-	}
+-
+-	@results = split(/\n/, $report);
+-	foreach $line (@results) {
+-		if ($line =~ /$event.*\|/) {
+-			my @vals = split(/\|/, $line);
+-			my $size = @vals;
+-
+-			for (my $i = 0; $i < $size; $i++) {
+-				if ($vals[$i] =~ /$event/) {
+-					$event_col_map{$event} = $i;
+-					return $i;
+-				}
+-			}
+-			die "Unable to find event column.\n";
+-		}
+-	}
+-	die "Unable to find column labels.\n";
+-}
+-
+-sub get_current_eventcount()
+-{
+-	my @results;
+-	my $line;
+-	my $hits = 0;
+-	my $self = shift;
+-	my $binName = shift;
+-	my $event = shift;
+-	my $col = 0;
+-
+-	my $lowlevel = $event_map{$event};
+-	if (!$lowlevel) {
+-		die "Unable to locate event for $event for this CPU.\n";
+-	}
+-	my @vals = split(/:/, $lowlevel);
+-	$event = $vals[0];
+-	# The event column in opreport only uses the first 12 letters of
+-	# the event name
+-	$event = substr($event, 0, 12);
+-	@results = split(/\n/, $report);
+-	$col = $self->_get_column($event);
+-
+-	foreach $line (@results) {
+-		if ($line !~ /^\s+[0-9]/) {
+-			next;
+-		}
+-		if ($binName eq "/" || $line =~ /$binName/) {
+-			chomp($line);
+-			$line =~ s/^\s+//;
+-			$line =~ s/\s+$//;
+-			$line =~ s/\s+/ /g;
+-			my @vals = split(/ /, $line);
+-			$hits += $vals[$col * 2];
+-		}
+-	}
+-	return $hits;
+-}
+-
+-sub read_eventcount()
+-{
+-	system("opcontrol --dump > /dev/null 2>&1");
+-	$report = `opreport -x 2> /dev/null`;
+-}
+-
+-sub shutdown()
+-{
+-	my $self = shift;
+-	_clear_oprofile();
+-	return $self;
+-}
+-
+-1;
+diff --git a/TLBC/PerfCollect.pm b/TLBC/PerfCollect.pm
+deleted file mode 100644
+index f44d920..0000000
+--- a/TLBC/PerfCollect.pm
++++ /dev/null
+@@ -1,144 +0,0 @@
+-#
+-# PerfCollect.pm
+-#
+-# This module contains all the setup, data collection, and cleanup methods
+-# for collecting CPU performance counter information from Ingo's perf tool.
+-# Licensed under LGPL 2.1 as packaged with libhugetlbfs
+-# (c) Eric Munson 2009
+-
+-package TLBC::PerfCollect;
+-
+-use warnings;
+-use strict;
+-use Carp;
+-
+-use FindBin qw($Bin);
+-use lib "$Bin/lib";
+-use TLBC::DataCollect;
+-
+-our @ISA = qw(TLBC::DataCollect);
+-
+-my $perf_output = "/tmp/perf_" . $$ . ".data";
+-my $reference;
+-my $report;
+-my $perf_pid;
+-my $perf_bin;
+-my $vmlinux;
+-my (%map_event_name, %map_event_mask);
+-
+-$map_event_name{"i386###dtlb_miss"} = "-e dTLB-miss";
+-$map_event_name{"x86-64###dtlb_miss"} = "-e dTLB-miss";
+-$map_event_name{"ppc64###dtlb_miss"} = "-e dTLB-miss";
+-
+-sub _get_event()
+-{
+-	my $self = shift;
+-	my $arch = shift;
+-	my $event = shift;
+-	my $ret;
+-
+-	$ret = $map_event_name{"$arch###$event"};
+-	if (not defined $ret or $ret eq "") {
+-		return "";
+-	}
+-	return $ret;
+-}
+-
+-sub new()
+-{
+-	my $class = shift;
+-	if ($reference) {
+-		return $reference;
+-	}
+-
+-	$reference = {@_};
+-	bless($reference, $class);
+-	return $reference;
+-}
+-
+-sub setup()
+-{
+-	my $self = shift;
+-	$vmlinux = shift;
+-	my $event_name = shift;
+-	$perf_bin = `which perf`;
+-	if (!$perf_bin) {
+-		return 0;
+-	}
+-	chomp($perf_bin);
+-
+-	my $arch = `uname -m`;
+-	chomp($arch);
+-	$arch =~ s/i.86/i386/g;
+-	my $event = $self->_get_event($arch, $event_name);
+-	if ($event eq "") {
+-		return 0;
+-	}
+-
+-	my $cmd = $perf_bin . " record -a -f -o $perf_output ". $event;
+-
+-	$perf_pid = fork();
+-	if (not defined $perf_pid) {
+-		return 0;
+-	} elsif ($perf_pid == 0) {
+-		exec $cmd or die "Failed to start perf monitor\n";
+-	} else {
+-		return $self;
+-	}
+-}
+-
+-sub samples()
+-{
+-	return 1;
+-}
+-
+-sub get_current_eventcount()
+-{
+-	my $self = shift;
+-	my $binName = shift;
+-	my $count = 0;
+-	my $total;
+-	my $line;
+-	my $hits;
+-	my @lines = split(/\n/, $report);
+-
+-	# @lines[2] will contain the total number of samples
+-	$lines[2] =~ m/(\d+)/;
+-	$total = $1;
+-
+-	if ($binName eq "vmlinux") {
+-		$binName = "kernel";
+-	}
+-
+-	foreach $line (@lines) {
+-		if ($binName eq "/" || $line =~ /$binName/) {
+-			chomp($line);
+-			$line =~ s/^\s+//;
+-			$line =~ s/\s+$//;
+-			$line =~ m/(\d+\.\d+)%/;
+-			# $1 should hold the percentage of hits for this
+-                        # $binName
+-			$count += int(($1 / 100) * $total);
+-		}
+-	}
+-
+-	return $count;
+-}
+-
+-sub read_eventcount()
+-{
+-	my $cmd = $perf_bin . " report -k $vmlinux -i $perf_output";
+-	$report = `$cmd`;
+-}
+-
+-sub shutdown()
+-{
+-	my $self = shift;
+-	my $cmd = "kill $perf_pid";
+-	system($cmd);
+-	unlink $perf_output;
+-	return $self;
+-}
+-
+-1;
+-
+diff --git a/TLBC/Report.pm b/TLBC/Report.pm
+deleted file mode 100644
+index bea0c05..0000000
+--- a/TLBC/Report.pm
++++ /dev/null
+@@ -1,58 +0,0 @@
+-#
+-# Report.pm
+-#
+-# This very simple module is simply for keeping report generation
+-# in the same place. The code is basically a glorified collection
+-# of print statements
+-# Licensed under LGPL 2.1 as packaged with libhugetlbfs
+-# (c) Mel Gorman 2003
+-
+-package TLBC::Report;
+-require Exporter;
+-use vars qw (@ISA @EXPORT);
+-use strict;
+-my $verbose;
+-
+-@ISA    = qw(Exporter);
+-@EXPORT = qw(&setVerbose &printVerbose &reportPrint &reportOpen &reportClose);
+-
+-##
+-# setVerbose - Set the verbose flag
+-sub setVerbose {
+-  $verbose = 1;
+-}
+-
+-##
+-# printVerbose - Print debugging messages if verbose is set
+-# @String to print
+-sub printVerbose {
+-  $verbose && print @_;
+-}
+-
+-##
+-# reportPrint - Print a string verbatim to the report
+-# @string:	String to print
+-sub reportPrint {
+-  my ($string) = @_;
+-
+-  print HTML $string;
+-}
+-
+-##
+-#
+-# reportOpen - Open a new report
+-# @filename: Filename of report to open
+-sub reportOpen {
+-  my ($filename) = @_;
+-
+-  open (HTML, ">$filename") or die("Could not open $filename");
+-}
+-
+-##
+-#
+-# reportClose - Close the report
+-sub reportClose {
+-  close HTML;
+-}
+-
+-1;
+diff --git a/contrib/tlbmiss_cost.sh b/contrib/tlbmiss_cost.sh
+deleted file mode 100755
+index 8fbf798..0000000
+--- a/contrib/tlbmiss_cost.sh
++++ /dev/null
+@@ -1,693 +0,0 @@
+-#!/bin/bash
+-# Wrapper script around calibrator or oprofile, used to calculate the number
+-# of cycles it takes to handle a tlb miss.  calibrator will need to be
+-# downloaded seperately to be used here, otherwise oprofile will be used.
+-# oprofile does not generate accurate results on x86 or x86_64.
+-#
+-# Both methods were lifted from a paper by Mel Gorman <mel@csn.ul.ie>
+-#
+-# Licensed under LGPL 2.1 as packaged with libhugetlbfs
+-# (c) Eric B Munson 2009
+-# (c) Mel Gorman 2009
+-
+-# calibrator can be found here:
+-# http://homepages.cwi.nl/~manegold/Calibrator/v0.9e/calibrator.c
+-# and should be compiled with this command line:
+-# gcc calibrator.c -lm -o calibrator
+-# and then placed in the same directory as this script
+-# Note: Do not use any optimisation to avoid skewing the results
+-
+-# trace == 3
+-# info  == 2 (default, should remain quiet in practicet)
+-# error == 1
+-VERBOSE=2
+-MHZ=0
+-
+-cpumhz() {
+-	MAX_MHZ=0
+-	SYSFS_SCALING=/sys/devices/system/cpu/cpu0/cpufreq/scaling_available_frequencies
+-
+-	# Use sysfs if available
+-	if [ -e $SYSFS_SCALING ]; then
+-		for CURR_MHZ in `cat $SYSFS_SCALING`; do
+-			CURR_MHZ=$(($CURR_MHZ/1000))
+-			if [ $CURR_MHZ -gt $MAX_MHZ ]; then
+-				MAX_MHZ=$CURR_MHZ
+-			fi
+-		done
+-		MHZ=$MAX_MHZ
+-		return
+-	fi
+-
+-	# Otherwise, use /proc/cpuinfo. Guess what field name is needed.
+-	# In most cases, it's cpu MHz but there will be exceptions
+-	FNAME="cpu MHz"
+-	FINDEX=4
+-	case "`uname -m`" in
+-		ppc64|ppc64le)
+-			FNAME="clock"
+-			FINDEX=3
+-			;;
+-	esac
+-
+-	# Take a hundred samples in case of CPU frequency scaling artifically
+-	# returning a low value. The multiple samples should wake up the CPU
+-	for SAMPLE in `seq 1 100`; do
+-		for CURR_MHZ in `grep "$FNAME" /proc/cpuinfo | awk "{print \\\$$FINDEX}"`; do
+-			CURR_MHZ=${CURR_MHZ/.*}
+-			if [ "$CURR_MHZ" = "" ]; then
+-				echo ERROR: Unable to extract CPU speed from /proc
+-				exit -1
+-			fi
+-
+-			if [ $CURR_MHZ -gt $MAX_MHZ ]; then
+-				MAX_MHZ=$CURR_MHZ
+-			fi
+-		done
+-	done
+-
+-	MHZ=$MAX_MHZ
+-	return
+-}
+-
+-# Print help message
+-usage() {
+-	echo "tlbmiss_cost.sh [options]
+-options:
+- --fetch-calibrator         Download and build calibrator if not in path
+- --fetch-stream             Download and build STREAM if not in path
+- -c, --calibrator           Path to calibrator helper if not in path
+- -s, --stream               Path to STREAM helper if not in path
+- -q, --quiet                Be less verbose in output
+- -v, --verbose              Be more verbose in output
+- -h, --help                 Print this help message"
+-	exit 1
+-}
+-# Print verbose message to stderr if --verbose is specified
+-print_trace()
+-{
+-	if [ $VERBOSE -ge 3 ]; then
+-		echo "TRACE: $@" 1>&2
+-	fi
+-}
+-
+-print_error()
+-{
+-	if [ $VERBOSE -ge 1 ]; then
+-		echo "ERROR: $@" 1>&2
+-	fi
+-}
+-
+-die()
+-{
+-	print_error $@
+-	exit -1
+-}
+-
+-calibrator_fetch()
+-{
+-	if [ "`which calibrator`" != "" -o -e ./calibrator ]; then
+-		echo Calibrator is already in path or in current directory
+-		return
+-	fi
+-
+-	TMPFILE=`mktemp`.c
+-	if [ "$TMPFILE" = "" ]; then
+-		die Failed to create tmpfile
+-	fi
+-	trap "rm $TMPFILE; exit" INT
+-
+-	WGET=`which wget 2> /dev/null`
+-	if [ "$WGET" = "" ]; then
+-		rm $TMPFILE
+-		die wget is not installed, cannot fetch calibrator.c
+-	fi
+-
+-	wget http://homepages.cwi.nl/~manegold/Calibrator/v0.9e/calibrator.c -O $TMPFILE || die Failed to download calibrator.c
+-
+-	# Calibrator defines a function round() which sometimes collides with
+-	# a system-defined version. This patch removes the naming collision
+-	PATCHFILE=`basename $TMPFILE`
+-	echo "--- $PATCHFILE.orig	2010-02-02 14:34:38.000000000 +0000
+-+++ $PATCHFILE	2010-02-02 14:35:27.000000000 +0000
+-@@ -128,7 +128,7 @@
+-	exit(1);
+- }
+-
+--lng round(dbl x)
+-+lng calibrator_round(dbl x)
+- {
+-	return (lng)(x + 0.5);
+- }
+-@@ -890,16 +890,16 @@
+-	fprintf(fp, \")\n\");
+-	fprintf(fp, \"set y2tics\");
+-	for (l = 0, s = \" (\"; l <= cache->levels; l++, s = \", \") {
+--		if (!delay)	fprintf(fp, \"%s'(%ld)' %f\", s, round(CYperIt(cache->latency1[l] - delay)), NSperIt(cache->latency1[l] - delay));
+--			else	fprintf(fp, \"%s'(%ld)' %f\", s, round(CYperIt(cache->latency2[l] - delay)), NSperIt(cache->latency2[l] - delay));
+-+		if (!delay)	fprintf(fp, \"%s'(%ld)' %f\", s, calibrator_round(CYperIt(cache->latency1[l] - delay)), NSperIt(cache->latency1[l] - delay));
+-+			else	fprintf(fp, \"%s'(%ld)' %f\", s, calibrator_round(CYperIt(cache->latency2[l] - delay)), NSperIt(cache->latency2[l] - delay));
+-	}
+-	for (y = 1; y <= yh; y *= 10) {
+-		fprintf(fp, \"%s'%1.3g' %ld\", s, (dbl)(y * MHz) / 1000.0, y);
+-	}
+-	fprintf(fp, \")\n\");
+-	for (l = 0; l <= cache->levels; l++) {
+--		if (!delay)	z = (dbl)round(CYperIt(cache->latency1[l] - delay)) * 1000.0 / (dbl)MHz;
+--			else	z = (dbl)round(CYperIt(cache->latency2[l] - delay)) * 1000.0 / (dbl)MHz;
+-+		if (!delay)	z = (dbl)calibrator_round(CYperIt(cache->latency1[l] - delay)) * 1000.0 / (dbl)MHz;
+-+			else	z = (dbl)calibrator_round(CYperIt(cache->latency2[l] - delay)) * 1000.0 / (dbl)MHz;
+-		fprintf(fp, \"set label %ld '(%1.3g)  ' at %f,%f right\n\", l + 1, z, xl, z);
+-		fprintf(fp, \"set arrow %ld from %f,%f to %f,%f nohead lt 0\n\", l + 1, xl, z, xh, z);
+-	}
+-@@ -986,16 +986,16 @@
+-	fprintf(fp, \"%s'<L1>' %ld)\n\", s, TLB->mincachelines);
+-	fprintf(fp, \"set y2tics\");
+-	for (l = 0, s = \" (\"; l <= TLB->levels; l++, s = \", \") {
+--		if (!delay)	fprintf(fp, \"%s'(%ld)' %f\", s, round(CYperIt(TLB->latency1[l] - delay)), NSperIt(TLB->latency1[l] - delay));
+--			else	fprintf(fp, \"%s'(%ld)' %f\", s, round(CYperIt(TLB->latency2[l] - delay)), NSperIt(TLB->latency2[l] - delay));
+-+		if (!delay)	fprintf(fp, \"%s'(%ld)' %f\", s, calibrator_round(CYperIt(TLB->latency1[l] - delay)), NSperIt(TLB->latency1[l] - delay));
+-+			else	fprintf(fp, \"%s'(%ld)' %f\", s, calibrator_round(CYperIt(TLB->latency2[l] - delay)), NSperIt(TLB->latency2[l] - delay));
+-	}
+-	for (y = 1; y <= yh; y *= 10) {
+-		fprintf(fp, \"%s'%1.3g' %ld\", s, (dbl)(y * MHz) / 1000.0, y);
+-	}
+-	fprintf(fp, \")\n\");
+-	for (l = 0; l <= TLB->levels; l++) {
+--		if (!delay)	z = (dbl)round(CYperIt(TLB->latency1[l] - delay)) * 1000.0 / (dbl)MHz;
+--			else	z = (dbl)round(CYperIt(TLB->latency2[l] - delay)) * 1000.0 / (dbl)MHz;
+-+		if (!delay)	z = (dbl)calibrator_round(CYperIt(TLB->latency1[l] - delay)) * 1000.0 / (dbl)MHz;
+-+			else	z = (dbl)calibrator_round(CYperIt(TLB->latency2[l] - delay)) * 1000.0 / (dbl)MHz;
+-		fprintf(fp, \"set label %ld '(%1.3g)  ' at %f,%f right\n\", l + 1, z, xl, z);
+-		fprintf(fp, \"set arrow %ld from %f,%f to %f,%f nohead lt 0\n\", l + 1, xl, z, xh, z);
+-	}
+-@@ -1023,9 +1023,9 @@
+-	FILE	*fp = stdout;
+-
+-	fprintf(fp, \"CPU loop + L1 access:    \");
+--	fprintf(fp, \" %6.2f ns = %3ld cy\n\", NSperIt(cache->latency1[0]), round(CYperIt(cache->latency1[0])));
+-+	fprintf(fp, \" %6.2f ns = %3ld cy\n\", NSperIt(cache->latency1[0]), calibrator_round(CYperIt(cache->latency1[0])));
+-	fprintf(fp, \"             ( delay:    \");
+--	fprintf(fp, \" %6.2f ns = %3ld cy )\n\", NSperIt(delay),            round(CYperIt(delay)));
+-+	fprintf(fp, \" %6.2f ns = %3ld cy )\n\", NSperIt(delay),            calibrator_round(CYperIt(delay)));
+-	fprintf(fp, \"\n\");
+-	fflush(fp);
+- }
+-@@ -1047,8 +1047,8 @@
+-			fprintf(fp, \" %3ld KB \", cache->size[l] / 1024);
+-		}
+-		fprintf(fp, \" %3ld bytes \", cache->linesize[l + 1]);
+--		fprintf(fp, \" %6.2f ns = %3ld cy \" , NSperIt(cache->latency2[l + 1] - cache->latency2[l]), round(CYperIt(cache->latency2[l + 1] - cache->latency2[l])));
+--		fprintf(fp, \" %6.2f ns = %3ld cy\n\", NSperIt(cache->latency1[l + 1] - cache->latency1[l]), round(CYperIt(cache->latency1[l + 1] - cache->latency1[l])));
+-+		fprintf(fp, \" %6.2f ns = %3ld cy \" , NSperIt(cache->latency2[l + 1] - cache->latency2[l]), calibrator_round(CYperIt(cache->latency2[l + 1] - cache->latency2[l])));
+-+		fprintf(fp, \" %6.2f ns = %3ld cy\n\", NSperIt(cache->latency1[l + 1] - cache->latency1[l]), calibrator_round(CYperIt(cache->latency1[l + 1] - cache->latency1[l])));
+-	}
+-	fprintf(fp, \"\n\");
+-	fflush(fp);
+-@@ -1075,9 +1075,9 @@
+-		} else {
+-			fprintf(fp, \"  %3ld KB  \", TLB->pagesize[l + 1] / 1024);
+-		}
+--		fprintf(fp, \" %6.2f ns = %3ld cy \", NSperIt(TLB->latency2[l + 1] - TLB->latency2[l]), round(CYperIt(TLB->latency2[l + 1] - TLB->latency2[l])));
+-+		fprintf(fp, \" %6.2f ns = %3ld cy \", NSperIt(TLB->latency2[l + 1] - TLB->latency2[l]), calibrator_round(CYperIt(TLB->latency2[l + 1] - TLB->latency2[l])));
+- /*
+--		fprintf(fp, \" %6.2f ns = %3ld cy\" , NSperIt(TLB->latency1[l + 1] - TLB->latency1[l]), round(CYperIt(TLB->latency1[l + 1] - TLB->latency1[l])));
+-+		fprintf(fp, \" %6.2f ns = %3ld cy\" , NSperIt(TLB->latency1[l + 1] - TLB->latency1[l]), calibrator_round(CYperIt(TLB->latency1[l + 1] - TLB->latency1[l])));
+- */
+-		fprintf(fp, \"\n\");
+-	}
+-" | patch -d /tmp
+-
+-	LICENSE_END=`grep -n "^ \*/" $TMPFILE | head -1 | cut -f1 -d:`
+-	echo Displaying calibrator license
+-	head -$LICENSE_END $TMPFILE
+-	echo
+-	echo Calibrator is an external tool used by tlbmiss_cost.sh. The license
+-	echo for this software is displayed above. Are you willing to accept the
+-	echo -n "terms of this license [Y/N]? "
+-	read INPUT
+-
+-	if [ "$INPUT" != "Y" -a "$INPUT" != "y" ]; then
+-		rm $TMPFILE
+-		echo Bailing...
+-		return
+-	fi
+-	echo Building...
+-	gcc $TMPFILE -w -lm -o calibrator || die Failed to compile calibrator
+-	echo Calibrator available at ./calibrator. For future use, run tlbmiss_cost.sh
+-	echo from current directory or copy calibrator into your PATH
+-	echo
+-
+-	rm $TMPFILE
+-}
+-
+-calibrator_calc()
+-{
+-	if [ "$CALIBRATOR" = "" ]; then
+-		CALIBRATOR=`which calibrator 2>/dev/null`
+-		if [ "$CALIBRATOR" = "" ]; then
+-			CALIBRATOR="./calibrator"
+-		fi
+-	fi
+-
+-	if [[ ! -x $CALIBRATOR ]]; then
+-		die "Unable to locate calibrator. Consider using --fetch-calibrator."
+-	fi
+-
+-	cpumhz
+-	SIZE=$((13*1048576))
+-	STRIDE=3932160
+-	PREFIX=tlbmiss-cost-results
+-	TMPFILE=`mktemp`
+-	TOLERANCE=2
+-	MATCH_REQUIREMENT=3
+-	MEASURED=0
+-	FAILED_MEASURE=0
+-
+-	if [ "$TMPFILE" = "" ]; then
+-		die Failed to create tmpfile
+-	fi
+-	if [ "$MHZ" = "" ]; then
+-		die Failed to calculate CPU MHz
+-	fi
+-	trap "rm $TMPFILE*; exit" INT
+-
+-	MATCHED=0
+-	LAST_LATENCY_CYCLES=-1
+-
+-	print_trace Beginning TLB measurement using calibrator
+-	print_trace Measured CPU Speed: $MHZ MHz
+-	print_trace Starting Working Set Size \(WSS\): $SIZE bytes
+-	print_trace Required tolerance for match: $MATCH_REQUIREMENT cycles
+-
+-	# Keep increasing size until TLB latency is being measured consistently
+-	while [ $MATCHED -lt $MATCH_REQUIREMENT ]; do
+-		$CALIBRATOR $MHZ $SIZE $PREFIX > $TMPFILE 2>&1
+-		if [ $? != 0 ]; then
+-			SIZE=$(($SIZE*2))
+-			continue
+-		fi
+-
+-		LATENCY_CYCLES=`grep ^TLBs: -A 2 $TMPFILE | tail -1 | awk -F = '{print $2}'`
+-		LATENCY_CYCLES=`echo $LATENCY_CYCLES | awk '{print $1}'`
+-
+-		if [ "$LATENCY_CYCLES" = "" ]; then
+-			FAILED_MEASURE=$(($FAILED_MEASURE+1))
+-			if [ $MEASURED -eq 0 ]; then
+-				SIZE=$(($SIZE*3/2))
+-				FAILED_MEASURE=0
+-			else
+-				if [ $FAILED_MEASURE -eq 3 ]; then
+-					SIZE=$(($SIZE+$STRIDE))
+-					FAILED_MEASURE=0
+-					print_trace No TLB Latency measured: New WSS $SIZE
+-				else
+-					print_trace No TLB Latency measured: Retrying
+-				fi
+-			fi
+-			continue
+-		fi
+-		LOW_TOLERANCE=$(($LATENCY_CYCLES-$TOLERANCE))
+-		HIGH_TOLERANCE=$(($LATENCY_CYCLES+$TOLERANCE))
+-		if [ $LAST_LATENCY_CYCLES -ge $LOW_TOLERANCE -a \
+-				$LAST_LATENCY_CYCLES -le $HIGH_TOLERANCE ]; then
+-			MATCHED=$(($MATCHED+1))
+-			print_trace Measured TLB Latency $LATENCY_CYCLES cycles within tolerance. Matched $MATCHED/$MATCH_REQUIREMENT
+-		else
+-			if [ $LAST_LATENCY_CYCLES -ne -1 ]; then
+-				print_trace Measured TLB Latency $LATENCY_CYCLES cycles outside tolerance
+-			fi
+-			MATCHED=0
+-		fi
+-
+-		LAST_LATENCY_CYCLES=$LATENCY_CYCLES
+-		SIZE=$(($SIZE+$STRIDE))
+-		MEASURED=$(($MEASURED+1))
+-		FAILED_MEASURE=0
+-	done
+-	rm $TMPFILE*
+-	rm tlbmiss-cost-results*
+-}
+-
+-# This method uses the stream memory benchmark which can be found here:
+-# http://www.cs.virginia.edu/stream/FTP/Code/stream.c
+-# and should be compiled with this command line:
+-# gcc -m32 -O3 -DN=44739240 stream.c -o STREAM
+-# and then placed in the same directory as this script
+-
+-stream_fetch()
+-{
+-	# STREAM binary is in caps as there is a commonly-available binary
+-	# called stream that is packaged with ImageMagick. This avoids some
+-	# confusion
+-	if [ "`which STREAM`" != "" -o -e ./STREAM ]; then
+-		echo STREAM is already in path or in current directory
+-		return
+-	fi
+-
+-	TMPFILE=`mktemp`.c
+-	if [ "$TMPFILE" = "" ]; then
+-		die Failed to create tmpfile
+-	fi
+-	trap "rm $TMPFILE; exit" INT
+-
+-	WGET=`which wget 2> /dev/null`
+-	if [ "$WGET" = "" ]; then
+-		rm $TMPFILE
+-		die wget is not installed, cannot fetch stream.c
+-	fi
+-
+-	wget http://www.cs.virginia.edu/stream/FTP/Code/stream.c -O $TMPFILE || die Failed to download stream.c
+-
+-	LICENSE_END=`grep -n "^/\*--" $TMPFILE | tail -1 | cut -f1 -d:`
+-	echo Displaying STREAM license
+-	head -$LICENSE_END $TMPFILE
+-	echo
+-	echo STREAM is an external tool used by tlbmiss_cost.sh. The license
+-	echo for this software is displayed above. Are you willing to accept the
+-	echo -n "terms of this license [Y/N]? "
+-	read INPUT
+-
+-	if [ "$INPUT" != "Y" -a "$INPUT" != "y" ]; then
+-		rm $TMPFILE
+-		echo Bailing...
+-		return
+-	fi
+-	echo Building...
+-	gcc -m32 -O3 -w -DN=44739240 $TMPFILE -o STREAM || die Failed to compile STREAM
+-	echo STREAM is available at ./STREAM. For future use, run tlbmiss_cost.sh
+-	echo from current directory or copy STREAM into your PATH
+-	echo
+-
+-	rm $TMPFILE
+-}
+-
+-seperate_dtlb_pagewalk_groups()
+-{
+-	TIMER_DTLB_EVENT=`oprofile_map_events.pl --event timer | cut -d: -f1 2> /dev/null`
+-	TIMER_WALK_EVENT=`oprofile_map_events.pl --event timer30 | cut -d: -f1 2> /dev/null`
+-
+-	# Help debug problems launching oprofile
+-	print_trace oprofile launch commands as follows
+-	print_trace dtlb misses :: oprofile_start --event timer --event dtlb_miss --sample-cycle-factor 5
+-	print_trace tablewalk cycles :: oprofile_start --event timer30 --event tablewalk_cycles --sample-cycle-factor 5 --sample-event-factor $SAMPLE_EVENT_FACTOR
+-
+-	print_trace Rerunning benchmark to measure number of DTLB misses
+-	$OPST $VMLINUX --event timer --event dtlb_miss --sample-cycle-factor 5 >/dev/null 2>&1 || \
+-		die "Error starting oprofile, check oprofile_map_event.pl for appropriate timer and dtlb_miss events."
+-	$STREAM >/dev/null 2>&1
+-
+-	opcontrol --stop >/dev/null 2>&1
+-	opcontrol --dump >/dev/null 2>&1
+-
+-	# First ensure that the location of event counters are where we
+-	# expect them to be. The expectation is that the timer30 is in
+-	# the first column and the tablewalk_cycles is in the third
+-	SAMPLES_START=`opreport | grep -n "samples|" | head -1 | cut -d: -f1`
+-	if [ "$SAMPLES_START" = "" ]; then
+-		die Could not establish start of samples from opreport
+-		SAMPLES_START=$(($COUNT_START+1))
+-	fi
+-	INDEX=`opreport | head -$SAMPLES_START | grep "^Counted .* events" | grep -n $TIMER_DTLB_EVENT | cut -d: -f1`
+-	TIMER_DTLB_FIELD=$((1+2*($INDEX - 1)))
+-	if [ $TIMER_DTLB_FIELD -eq 1 ]; then
+-		DTLB_TIMER_INDEX=1
+-	else
+-		DTLB_TIMER_INDEX=2
+-	fi
+-
+-	TIMER_DTLB_SCALE=`opreport | grep "$TIMER_DTLB_EVENT" | head -1 | sed 's/.* count \([0-9]*\).*/\1/'`
+-	DTLB_SCALE=`opreport | grep "$DTLB_EVENT" | head -1 | sed 's/.* count \([0-9]*\).*/\1/'`
+-
+-	RESULTS=`opreport | grep " STREAM" | head -1`
+-	FIELD1=`echo "$RESULTS" | sed 's/[[:space:]]*\([0-9]*\).*/\1/'`
+-	FIELD2=`echo "$RESULTS" | sed 's/[[:space:]]*[0-9]*[[:space:]]*[[:graph:]]*[[:space:]]*\([0-9]*\).*/\1/'`
+-	RESULTS=`opreport | grep " vmlinux" | head -1`
+-	KERNEL_FIELD1=`echo "$RESULTS" | sed 's/[[:space:]]*\([0-9]*\).*/\1/'`
+-	KERNEL_FIELD2=`echo "$RESULTS" | sed 's/[[:space:]]*[0-9]*[[:space:]]*[[:graph:]]*[[:space:]]*\([0-9]*\).*/\1/'`
+-
+-	if [ $DTLB_TIMER_INDEX -eq 1 ] ; then
+-		TIMER_DTLB=$(($FIELD1+$KERNEL_FIELD1))
+-		DTLB=$(($FIELD2+$KERNEL_FIELD2))
+-	else
+-		TIMER_DTLB=$(($FIELD2+$KERNEL_FIELD2))
+-		DTLB=$(($FIELD1+$KERNEL_FIELD1))
+-	fi
+-
+-	print_trace Shutting down oprofile
+-	opcontrol --shutdown >/dev/null 2>&1
+-	opcontrol --deinit >/dev/null 2>&1
+-
+-	# Next STREAM needs to be run measuring the tablewalk_cycles. Because
+-	# of differences in the frequency CPU events occur, there are
+-	# alterations in the timing. To make an accurate comparison, the
+-	# cycle counts of the two profiles need to be very similar. oprofile
+-	# does not give much help here in matching up different reports taking
+-	# different readings so there is nothing really to do but run STREAM
+-	# multiple times, scaling the events at different rates until a
+-	# reasonably close match is found.
+-
+-	# The cycle counts for two oprofiles must be within 10% of each other
+-	TOLERANCE=$(($TIMER_DTLB*4/100))
+-	SAMPLE_EVENT_FACTOR=1
+-	LOW_TIMER_WALK=0
+-	HIGH_TIMER_WALK=0
+-
+-	print_trace Running benchmark to measure table walk cycles
+-	while [ $TIMER_DTLB -ge $LOW_TIMER_WALK -a $TIMER_DTLB -ge $HIGH_TIMER_WALK ]; do
+-
+-		if [ $LOW_TIMER_WALK -ne 0 ]; then
+-			print_trace High diff with scaling x$LAST_SAMPLE_EVENT_FACTOR. Required $TIMER_DTLB +/ $TOLERANCE, got $TIMER_WALK
+-		fi
+-
+-		$OPST $VMLINUX --event timer30 --event tablewalk_cycles --sample-cycle-factor 5 --sample-event-factor $SAMPLE_EVENT_FACTOR >/dev/null 2>&1 || \
+-			die "Error starting oprofile, check oprofile_map_event.pl for appropriate timer30 and tablewalk_cycles events."
+-		$STREAM >/dev/null 2>&1
+-
+-		opcontrol --stop >/dev/null 2>&1
+-		opcontrol --dump >/dev/null 2>&1
+-
+-		# Extract the event counts
+-		TIMER_WALK_SCALE=`opreport | grep "$TIMER_WALK_EVENT" | head -1 | sed 's/.* count \([0-9]*\).*/\1/'`
+-		WALK_SCALE=`opreport | grep "$WALK_EVENT" | head -1 | sed 's/.* count \([0-9]*\).*/\1/'`
+-
+-		# This shouldn't happen. One would expect that the minimum sample
+-		# rate for any of the timers in any groups is the same. If they
+-		# differ, it might be a simple bug in oprofile_map_event that
+-		# needs fixing. In the event this bug is reported, get the CPU
+-		# type and the output of opcontrol --list-events
+-		if [ $TIMER_DTLB_SCALE -ne $TIMER_WALK_SCALE ]; then
+-			die Cycle CPUs were sampled at different rates.
+-		fi
+-
+-		RESULTS=`opreport | grep " STREAM" | head -1`
+-		FIELD1=`echo "$RESULTS" | sed 's/[[:space:]]*\([0-9]*\).*/\1/'`
+-		FIELD2=`echo "$RESULTS" | sed 's/[[:space:]]*[0-9]*[[:space:]]*[[:graph:]]*[[:space:]]*\([0-9]*\).*/\1/'`
+-		RESULTS=`opreport | grep " vmlinux" | head -1`
+-		KERNEL_FIELD1=`echo "$RESULTS" | sed 's/[[:space:]]*\([0-9]*\).*/\1/'`
+-		KERNEL_FIELD2=`echo "$RESULTS" | sed 's/[[:space:]]*[0-9]*[[:space:]]*[[:graph:]]*[[:space:]]*\([0-9]*\).*/\1/'`
+-
+-		if [ $DTLB_TIMER_INDEX -eq 1 ] ; then
+-			TIMER_WALK=$(($FIELD1+$KERNEL_FIELD1))
+-			WALK=$(($FIELD2+$KERNEL_FIELD2))
+-		else
+-			TIMER_WALK=$(($FIELD2+$KERNEL_FIELD2))
+-			WALK=$(($FIELD1+$KERNEL_FIELD1))
+-		fi
+-
+-		LOW_TIMER_WALK=$(($TIMER_WALK-$TOLERANCE))
+-		HIGH_TIMER_WALK=$(($TIMER_WALK+$TOLERANCE))
+-
+-		# Scale faster if the difference between timers is huge
+-		LAST_SAMPLE_EVENT_FACTOR=$SAMPLE_EVENT_FACTOR
+-		if [ $(($TIMER_DTLB*3/4-$HIGH_TIMER_WALK)) -gt 0 ]; then
+-			SAMPLE_EVENT_FACTOR=$(($SAMPLE_EVENT_FACTOR+3))
+-		elif [ $(($TIMER_DTLB*9/10-$HIGH_TIMER_WALK)) -gt 0 ]; then
+-			SAMPLE_EVENT_FACTOR=$(($SAMPLE_EVENT_FACTOR+2))
+-		else
+-			SAMPLE_EVENT_FACTOR=$(($SAMPLE_EVENT_FACTOR+1))
+-		fi
+-
+-		opcontrol --shutdown >/dev/null 2>&1
+-		opcontrol --deinit >/dev/null 2>&1
+-	done
+-
+-	print_trace "DTLB       Scale: $DTLB_SCALE"
+-	print_trace "Walk       Scale: $WALK_SCALE"
+-	print_trace "DTLB    events: $DTLB"
+-	print_trace "Walk    events: $WALK"
+-	print_trace "Cycle DTLB Scale: $TIMER_DTLB_SCALE"
+-	print_trace "Cycle Walk Scale: $TIMER_WALK_SCALE"
+-	print_trace "Cycle DTLB events: $TIMER_DTLB"
+-	print_trace "Cycle Walk events: $TIMER_WALK"
+-}
+-
+-dtlb_pagewalk_same_group()
+-{
+-	print_trace oprofile launch command as follows
+-	print_trace $OPST --event dtlb_miss --event tablewalk_cycles
+-
+-	$OPST $VMLINUX --event dtlb_miss --event tablewalk_cycles > /dev/null 2>&1 || \
+-		die "Error starting oprofile, check oprofile_map_event.pl for appropriate dtlb_miss and tablewalk_cycles events."
+-	$STREAM >/dev/null 2>&1
+-
+-	opcontrol --stop >/dev/null 2>&1
+-	opcontrol --dump >/dev/null 2>&1
+-
+-	# First ensure that the location of event counters are where we
+-	# expect them to be. The expectation is that tablewalk_cycles is in
+-	# the first column and the dtlb_misses is in the second
+-	SAMPLES_START=`opreport | grep -n "samples|" | head -1 | cut -d: -f1`
+-	if [ "$SAMPLES_START" = "" ]; then
+-		die Could not establish start of samples from opreport
+-	fi
+-	INDEX=`opreport | head -$SAMPLES_START | grep "^Counted .* events" | grep -n $WALK_EVENT | cut -d: -f1`
+-	WALK_FIELD=$((1+2*($INDEX - 1)))
+-	if [ $WALK_FIELD -ne 1 ]; then
+-		die Table walk events are not in the expected column, parse failure
+-	fi
+-	INDEX=`opreport | head -$SAMPLES_START | grep "^Counted .* events" | grep -n $DTLB_EVENT | cut -d: -f1`
+-	DTLB_FIELD=$((1+2*($INDEX - 1)))
+-	if [ $DTLB_FIELD -ne 3 ]; then
+-		die DTLB miss events are not in the expected column, parse failure
+-	fi
+-
+-	# Columns look ok, extract the event counts
+-	DTLB_SCALE=`opreport | grep "$DTLB_EVENT" | head -1 | sed 's/.* count \([0-9]*\).*/\1/'`
+-	WALK_SCALE=`opreport | grep "$WALK_EVENT" | head -1 | sed 's/.* count \([0-9]*\).*/\1/'`
+-	RESULTS=`opreport | grep " STREAM" | head -1`
+-	WALK=`echo "$RESULTS" | sed 's/[[:space:]]*\([0-9]*\).*/\1/'`
+-	DTLB=`echo "$RESULTS" | sed 's/[[:space:]]*[0-9]*[[:space:]]*[[:graph:]]*[[:space:]]*\([0-9]*\).*/\1/'`
+-	RESULTS=`opreport | grep " vmlinux" | head -1`
+-	KERN_TABLE_WALK=`echo "$RESULTS" | sed 's/[[:space:]]*\([0-9]*\).*/\1/'`
+-	KERN_TLB_MISS=`echo "$RESULTS" | sed 's/[[:space:]]*[0-9]*[[:space:]]*[[:graph:]]*[[:space:]]*\([0-9]*\).*/\1/'`
+-
+-	print_trace "DTLB       Scale: $DTLB_SCALE"
+-	print_trace "Walk       Scale: $WALK_SCALE"
+-	print_trace "DTLB    events: $DTLB + $KERN_TLB_MISS = $(($DTLB+$KERN_TLB_MISS))"
+-	print_trace "Walk    events: $WALK + $KERN_TABLE_WALK = $(($WALK+$KERN_TABLE_WALK))"
+-
+-	if [[ "$KERN_TLB_MISS" != "" ]]; then
+-		DTLB=$(($DTLB+$KERN_TLB_MISS))
+-	fi
+-	if [[ "$KERN_TABLE_WALK" != "" ]]; then
+-		WALK=$(($WALK+$KERN_TABLE_WALK))
+-	fi
+-
+-	opcontrol --shutdown >/dev/null 2>&1
+-	opcontrol --deinit >/dev/null 2>&1
+-}
+-
+-oprofile_calc()
+-{
+-	if [ "$STREAM" = "" ]; then
+-		STREAM="./STREAM"
+-	fi
+-
+-	if [[ ! -x $STREAM ]]; then
+-		die "Unable to locate STREAM. Consider using --fetch-stream."
+-	fi
+-
+-	OPST=`which oprofile_start.sh`
+-	if [ "$OPST" = "" ]; then
+-		OPST="../oprofile_start.sh"
+-	fi
+-
+-	if [[ ! -x $OPST ]]; then
+-		die "Unable to locate oprofile_start.sh."
+-	fi
+-
+-	print_trace Forcing shutdown of oprofile
+-	opcontrol --shutdown >/dev/null 2>&1
+-	opcontrol --deinit >/dev/null 2>&1
+-
+-	print_trace Gathering the name of CPU events
+-	WALK_EVENT=`oprofile_map_events.pl --event tablewalk_cycles | cut -d: -f1 2> /dev/null`
+-	DTLB_EVENT=`oprofile_map_events.pl --event dtlb_miss | cut -d: -f1 2> /dev/null`
+-
+-	GROUP1=`echo $WALK_EVENT | sed 's/.*\(GRP[0-9]*\)/\1/'`
+-	GROUP2=`echo $DTLB_EVENT | sed 's/.*\(GRP[0-9]*\)/\1/'`
+-
+-	print_trace Warming the benchmark to avoid page faults of the binary
+-	$STREAM >/dev/null 2>&1
+-
+-	if [[ "$GROUP1" == "$GROUP2" ]] ; then
+-		print_trace "Events are in the same group: $GROUP1, using one oprofile pass"
+-		dtlb_pagewalk_same_group
+-	else
+-		print_trace "Events are in different groups: $GROUP1 and $GROUP2, using multiple oprofile passes"
+-		seperate_dtlb_pagewalk_groups
+-	fi
+-
+-	WALK=$(($WALK*$WALK_SCALE))
+-	DTLB=$(($DTLB*$DTLB_SCALE))
+-	LAST_LATENCY_CYCLES=$(($WALK/$DTLB))
+-}
+-
+-ARGS=`getopt -o c:s:fvqh --long calibrator:,stream:,vmlinux:,verbose,quiet,fetch-calibrator,fetch-stream,ignore-cache,help -n 'tlbmiss_cost.sh' -- "$@"`
+-
+-eval set -- "$ARGS"
+-
+-while true ; do
+-	case "$1" in
+-		-c|--calibrator) CALIBRATOR="$2" ; shift 2 ;;
+-		-s|--stream) STREAM="$2" ; shift 2 ;;
+-		--vmlinux) VMLINUX="--vmlinux $2" ; shift 2 ;;
+-		-v|--verbose) VERBOSE=$(($VERBOSE+1)); shift;;
+-		-q|--quiet) VERBOSE=$(($VERBOSE-1)); shift;;
+-		-f|--ignore-cache) IGNORE_CACHE=yes; shift;;
+-		--fetch-calibrator) calibrator_fetch; shift;;
+-		--fetch-stream) stream_fetch; shift;;
+-		-h|--help) usage; shift;;
+-		"") shift ; break ;;
+-		"--") shift ; break ;;
+-		*) die "Unrecognized option $1" ;;
+-	esac
+-done
+-
+-HOSTNAME=`hostname 2> /dev/null`
+-ARCH=`uname -m | sed -e s/i.86/i386/`
+-
+-if [ "$IGNORE_CACHE" != "yes" ]; then
+-	print_trace Searching for a cached value for TLB miss
+-
+-	# Look for a cached entry for the TLB miss value
+-	if [ -e /etc/tlbmisscost.conf ]; then
+-		print_trace Checking /etc/tlbmisscost.conf
+-		grep TLB_MISS_COST /etc/tlbmisscost.conf
+-		if [ $? -eq 0 ]; then
+-			exit 0
+-		fi
+-	fi
+-
+-	# Look for a cached entry in home
+-	if [ -e $HOME/.tlbmisscostrc ]; then
+-		print_trace Checking $HOME/.tlbmisscostrc
+-		HOSTNAME=`hostname 2> /dev/null`
+-		if [ "$HOSTNAME" != "" -a "$HOSTNAME" != "localhost" ]; then
+-			grep $HOSTNAME:TLB_MISS_COST $HOME/.tlbmisscostrc | sed -e "s/^$HOSTNAME://"
+-			if [ $? -eq 0 ]; then
+-				exit 0
+-			fi
+-		fi
+-	fi
+-	print_trace Cached value unavailable
+-fi
+-
+-if [[ "$ARCH" == "ppc64" || "$ARCH" == "ppc" ]]; then
+-	oprofile_calc
+-else
+-	calibrator_calc
+-fi
+-
+-echo TLB_MISS_COST=$LAST_LATENCY_CYCLES
+-
+-# Save for future reference
+-echo TLB_MISS_COST=$LAST_LATENCY_CYCLES 2> /dev/null > /etc/tlbmisscost.conf
+-if [ "$HOSTNAME" != "" -a "$HOSTNAME" != "localhost" ]; then
+-	grep -v $HOSTNAME:TLB_MISS_COST $HOME/.tlbmisscostrc > $HOME/.tlbmisscostrc.$$ 2> /dev/null
+-	echo $HOSTNAME:TLB_MISS_COST=$LAST_LATENCY_CYCLES >> $HOME/.tlbmisscostrc.$$
+-	mv $HOME/.tlbmisscostrc.$$ $HOME/.tlbmisscostrc
+-fi
+-
+-exit 0
+diff --git a/cpupcstat b/cpupcstat
+deleted file mode 100755
+index e6b44c3..0000000
+--- a/cpupcstat
++++ /dev/null
+@@ -1,337 +0,0 @@
+-#!/usr/bin/perl -w
+-# This script starts a requested application after setting up oprofile to
+-# collect TLB miss data.  It will use this data to calculate the TLB
+-# apporximate TLB miss rate.
+-# Licensed under LGPL 2.1 as packaged with libhugetlbfs
+-# (c) Eric Munson 2009
+-
+-use Getopt::Long;
+-use FindBin qw($Bin);
+-use lib "$Bin";
+-use POSIX ":sys_wait_h";
+-use TLBC::OpCollect;
+-use TLBC::PerfCollect;
+-use strict;
+-
+-my ($arch, $cputype);
+-my $vmlinux;
+-my $target;
+-my $real_target;
+-my $target_pid;
+-my $target_global;
+-my $misses;
+-my $instructions = 0;
+-my $cycles = 0;
+-my $kern_misses;
+-my $time_elapsed;
+-my $wait_time = 10;
+-my $time_limit;
+-my $persist = 0;
+-my $instruct_ratio;
+-my $cycle_ratio;
+-my $service;
+-my $config;
+-my $cost_in_cycles = 0;
+-my $kernel;
+-my $force_oprofile;
+-my $collector;
+-my $miss_scale = 0;
+-my $ins_scale = 0;
+-my $cyc_scale = 0;
+-
+-sub calc_tlbmiss_cost()
+-{
+-	my $cost_script = `which tlbmiss_cost.sh`;
+-	if ($cost_script eq "") {
+-		$cost_script = "$Bin/contrib/tlbmiss_cost.sh";
+-	}
+-	my $data = `$cost_script --vmlinux $vmlinux`;
+-	($data,$cost_in_cycles) = split(/\=/, $data);
+-	chomp($cost_in_cycles);
+-}
+-
+-sub start_target()
+-{
+-	my $pid = fork();
+-	if (not defined $pid) {
+-		die "Failed to fork\n";
+-	} elsif ($pid == 0) {
+-		exec $target or die "Failed to exec '$target'\n";
+-	} else {
+-		return($pid);
+-	}
+-}
+-
+-sub run_profile()
+-{
+-	my $start_time;
+-	my $end_time;
+-	my @results;
+-	my $binName;
+-	my $pid;
+-	my $ret;
+-	my $prev = 0;
+-	my $kern_prev = 0;
+-	my $ins_new = 0;
+-	my $ins_prev = 0;
+-	my $cyc_new = 0;
+-	my $cyc_prev = 0;
+-	my $new;
+-	my @events;
+-
+-	if ($force_oprofile) {
+-		$collector = TLBC::OpCollect->new();
+-	} else {
+-		$collector = TLBC::PerfCollect->new();
+-	}
+-
+-	push(@events, "dtlb_miss");
+-	if ($instruct_ratio) {
+-		push(@events, "instructions");
+-	}
+-	if ($cycle_ratio || $service) {
+-		push(@events, "timer");
+-	}
+-
+-	$start_time = time();
+-
+-	if ($collector->setup($vmlinux, \@events) == 0) {
+-		$collector = TLBC::OpCollect->new();
+-		if ($force_oprofile ||
+-			$collector->setup($vmlinux, \@events) == 0) {
+-			die("Unable to setup data collector");
+-		}
+-	}
+-
+-	if (defined $target_pid) {
+-		$target = readlink("/proc/$target_pid/exe");
+-		chomp($target);
+-		$binName = $target;
+-		$pid = $target_pid;
+-	} elsif (defined $target) {
+-		if (defined $real_target) {
+-			$binName = $real_target;
+-		} else {
+-			@results = split(/ /, $target);
+-			$binName = $results[0];
+-		}
+-		$pid = start_target();
+-	} elsif (defined $target_global) {
+-		$binName='/';
+-		$pid = $$;
+-	}
+-
+-	$binName = `basename $binName`;
+-	chomp($binName);
+-
+-	printf("%15s%18s%19s", "Target Name", "DTLB Miss Samples",
+-		"Samples/second");
+-
+-	$miss_scale = $collector->samples("dtlb_miss");
+-	if ($instruct_ratio) {
+-		printf("%24s\n", "Instructions/TLB Miss\n");
+-		$ins_scale = $collector->samples("instructions");
+-	} elsif ($cycle_ratio) {
+-		printf("%24s\n", "Cycles/TLB Miss\n");
+-		$cyc_scale = $collector->samples("timer");
+-	} elsif ($service) {
+-		printf("%24s\n", "TLB Miss %age Time\n");
+-		$cyc_scale = $collector->samples("timer");
+-	} else {
+-		print("\n");
+-	}
+-
+-	printf("%15s%18s%19s\n", "", "Sample every " . $collector->samples("dtlb_miss"), "");
+-	sleep($wait_time);
+-
+-	# While our target is still running and we have not exceeded our
+-	# runtime, collect oprofile data every $wait_time seconds to display
+-	# the dtlb miss rate.
+-	while (waitpid($pid, WNOHANG) <= 0 || $persist) {
+-		$collector->read_eventcount();
+-		$ret = $collector->get_current_eventcount($binName, "dtlb_miss");
+-		$new = $ret - $prev;
+-		printf("%15s%18d%19f", $binName, $new, $new / $wait_time);
+-		$prev = $ret;
+-
+-		if ($instruct_ratio) {
+-			$ret = $collector->get_current_eventcount($binName,
+-				"instructions");
+-			$ins_new = $ret - $ins_prev;
+-			if ($new == 0) {
+-				printf("%24f\n", $new);
+-			} else {
+-				printf("%24f\n",
+-				($ins_new * $ins_scale) / ($new * $miss_scale));
+-			}
+-			$ins_prev = $ret;
+-		} elsif ($cycle_ratio) {
+-			$ret = $collector->get_current_eventcount($binName,
+-				"timer");
+-			$cyc_new = $ret - $cyc_prev;
+-			if ($new == 0) {
+-				printf("%24f\n", $new);
+-			} else {
+-				printf("%24f\n",
+-				($cyc_new * $cyc_scale) / ($new * $miss_scale));
+-			}
+-			$cyc_prev = $ret;
+-		} elsif ($service) {
+-
+-			$ret = $collector->get_current_eventcount($binName,
+-				"timer");
+-			$cyc_new = $ret - $cyc_prev;
+-			my $miss_cycles = $new * $cost_in_cycles * $miss_scale;
+-			my $total_cycles = $cyc_new * $cyc_scale;
+-
+-			printf "%24.4f%%\n", $miss_cycles * 100/$total_cycles;
+-
+-			$cyc_prev = $ret;
+-		} else {
+-			print("\n");
+-		}
+-		if ($kernel) {
+-			$ret = $collector->get_current_eventcount("vmlinux", "dtlb_miss");
+-			$new = $ret - $kern_prev;
+-			printf("%15s%18d%19f\n", "vmlinux", $new,
+-				$new / $wait_time);
+-			$kern_prev = $ret;
+-		}
+-		$end_time = time();
+-		$time_elapsed = $end_time - $start_time;
+-		if (defined $time_limit && $time_elapsed > $time_limit) {
+-			last;
+-		}
+-		sleep($wait_time);
+-	}
+-	$end_time = time();
+-	$time_elapsed = $end_time - $start_time;
+-	$collector->read_eventcount();
+-	$misses = $collector->get_current_eventcount($binName, "dtlb_miss");
+-	if ($instruct_ratio) {
+-		$instructions = $collector->get_current_eventcount($binName, "instructions");
+-	}
+-	if ($cycle_ratio || $service) {
+-		$cycles = $collector->get_current_eventcount($binName, "timer");
+-	}
+-
+-	if ($kernel) {
+-		$kern_misses = $collector->get_current_eventcount("vmlinux", "dtlb_miss");
+-	}
+-
+-	$collector->shutdown();
+-}
+-
+-sub get_target()
+-{
+-	$target .= $_[0] . " ";
+-}
+-
+-sub print_usage()
+-{
+-	print "Usage: cpupcstat [options] target
+-	Options:
+-	--vmlinux /path/to/vmlinux Sets the vmlinux file to use
+-	--delay N                  Waits N seconds before rereading the
+-                                   miss rate
+-	--target-global            Watch the miss rate of all processes
+-	--target-pid P             Watch the miss rate of P instead of a target
+-	--real-target T            Watch T instead of target in case target is
+-                                   a launcher script
+-	--time-limit L             Sets a time limit for watching the target
+-	--kernel                   Output DTLB miss data for the kernel as well
+-                                   as the specified target
+-	--time-servicing           Print the percentage of time servicing TLB
+-                                   misses
+-	--misses-per-instruction   Prints the ratio of TLB misses per
+-                                   instruction retired
+-	--misses-per-cycle         Prints the ratio of TLB misses per CPU cycle
+-	--force-oprofile	   The perf tool is prefered for data
+-				   collection with oprofile as the fall back,
+-				   force oprofile usage instead
+-	--help                     prints this message
+-
+-	Note: If --target-pid is specified, target will be ignored.\n";
+-	exit(0);
+-}
+-
+-sub exit_cleanup()
+-{
+-	my $collector = TLBC::OpCollect->new();
+-	$collector->shutdown();
+-	exit(0);
+-}
+-use sigtrap 'handler' => \&exit_cleanup, 'INT';
+-
+-Getopt::Long::Configure ('bundling');
+-GetOptions ('v|vmlinux=s' => \$vmlinux,
+-	    'h|help' => \&print_usage,
+-	    'd|delay=i' => \$wait_time,
+-	    'g|target-global' => \$target_global,
+-	    'p|target-pid=i' => \$target_pid,
+-	    'r|real-target=s' => \$real_target,
+-	    'l|time-limit=i' => \$time_limit,
+-	    'k|kernel' => \$kernel,
+-	    'i|misses-per-instruction' => \$instruct_ratio,
+-	    'c|misses-per-cycle' => \$cycle_ratio,
+-	    't|time-servicing' => \$service,
+-	    'C|cost-config=s' => \$config,
+-	    'o|force-oprofile' => \$force_oprofile,
+-	    's|persist' => \$persist,
+-	    '<>' => \&get_target);
+-
+-if (!$target && !$target_global && not defined $target_pid) {
+-	print_usage();
+-}
+-
+-if (!$vmlinux) {
+-	$vmlinux = "/boot/vmlinux-" . `uname -r`;
+-}
+-
+-chomp($vmlinux);
+-if ($target) {
+-	chomp($target);
+-}
+-
+-if ($service) {
+-	calc_tlbmiss_cost();
+-}
+-
+-$misses = 0;
+-$kern_misses = 0;
+-run_profile();
+-
+-if ($misses > 0) {
+-	print("\n$target saw $misses total DTLB miss samples over ",
+-		"$time_elapsed seconds\n");
+-	print("at rate of ", $misses / $time_elapsed, " samples/second\n");
+-	$misses *= $miss_scale;
+-	$cycles *= $cyc_scale;
+-	$instructions *= $ins_scale;
+-
+-	if ($instruct_ratio && $instructions > 0) {
+-		print("The ratio of instructions retired per TLB miss was ",
+-			$instructions / $misses, "\n");
+-	}
+-	if ($cycle_ratio && $cycles > 0) {
+-		print("The ratio of cycles per TLB miss was ",
+-			$cycles / $misses, "\n");
+-	}
+-
+-	if ($service && $cycles > 0) {
+-		if ($cost_in_cycles <= 0) {
+-			calc_tlbmiss_cost();
+-		}
+-		my $total_cost = $cost_in_cycles * $misses;
+-		print("$target spent ",
+-			$total_cost / $cycles * 100,
+-			"% of its CPU cycles servicing\nTLB misses\n");
+-	}
+-}
+-
+-if ($kern_misses > 0) {
+-	print("The kernel saw $kern_misses total DTLB miss samples over ",
+-		"$time_elapsed seconds\n");
+-	print("at rate of ", $kern_misses / $time_elapsed, " samples/second\n");
+-}
+-
+diff --git a/man/tlbmiss_cost.sh.8 b/man/tlbmiss_cost.sh.8
+deleted file mode 100644
+index 837dc66..0000000
+--- a/man/tlbmiss_cost.sh.8
++++ /dev/null
+@@ -1,85 +0,0 @@
+-.\"                                      Hey, EMACS: -*- nroff -*-
+-.\" First parameter, NAME, should be all caps
+-.\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
+-.\" other parameters are allowed: see man(7), man(1)
+-.TH TLBMISS_COST.SH 8 "16 December, 2009"
+-.\" Please adjust this date whenever revising the manpage.
+-.\"
+-.\" Some roff macros, for reference:
+-.\" .nh        disable hyphenation
+-.\" .hy        enable hyphenation
+-.\" .ad l      left justify
+-.\" .ad b      justify to both left and right margins
+-.\" .nf        disable filling
+-.\" .fi        enable filling
+-.\" .br        insert line break
+-.\" .sp <n>    insert n+1 empty lines
+-.\" for manpage-specific macros, see man(7)
+-.SH NAME
+-tlbmiss_cost.sh \- Measure the cost in CPU cycles of a TLB miss
+-.SH SYNOPSIS
+-.B tlbmiss_cost.sh [options]
+-.SH DESCRIPTION
+-\fBtlbmiss_cost.sh\fP uses oprofile or calibator to calculate the cost in CPU
+-cycles of servicing a TLB miss.  The method used depends on the architecture
+-where the script is being run.  On POWERPC, oprofile is used with the STREAM
+-benchmark (available here: http://www.cs.virginia.edu/stream/FTP/Code/stream.c).
+-On X86 and X86-64, calibrator is used (source available here:
+-http://homepages.cwi.nl/~manegold/Calibrator/v0.9e/calibrator.c)
+-These programs will need to be in place and available to \fBtlbmiss_cost.sh\fP
+-in order for \fBcpupcstat\fP to calculate the percentage of time spent servicing
+-TLB misses automatically.  \fBtlbmiss_cost.sh\fP can fetch and build these
+-programs for you with the appropriate options.
+-
+-The following options can be used to configure how \fBtlbmiss_cost.sh\fP works:
+-
+-.TP
+-.B --calibrator </path/to/calibrator>
+-
+-This option allows the user to specify the location of the \fBcalibrator\fP
+-tool.  If this is not specified the script will check the path and the current
+-working directory for \fBcalibrator\fP
+-
+-.TP
+-.B --stream </path/to/STREAM>
+-
+-This option allows the user to specify the location of the \fBSTREAM\fP
+-benchmarking tool (note that is this is not \fBstream(1)\fP).  If this is not
+-specified the script will check the path and the current working directory for
+-\fBSTREAM\fP
+-
+-.TP
+-.B --time-servicing
+-
+-Add an additional column printing out what percentage of time was spend
+-servicing TLB misses.
+-
+-.TP
+-.B --verbose
+-
+-This option increases the verbosity of the ouput.
+-
+-.TP
+-.B --quiet
+-
+-This option decreases the verbosity of the output.
+-
+-.TP
+-.B --fetch-calibrator
+-
+-This option has the script attempt to fetch the source for \fBcalibrator\fP,
+-builds it, and makes it available to \fBtlbmiss_cost.sh\fP
+-
+-.TP
+-.B --fetch-stream
+-
+-This option has the script attempt to fetch the source for \fBSTREAM\fP, builds
+-it, and makes it available to \fBtlbmiss_cost.sh\fP
+-
+-.SH SEE ALSO
+-.I cpupcstat(8)
+-.br
+-.SH AUTHORS
+-Eric B Munson <ebmunson@us.ibm.com> is the primary author. See the documentation
+-for other contributors.
+-
+diff --git a/oprofile_map_events.pl b/oprofile_map_events.pl
+deleted file mode 100755
+index 7af5c62..0000000
+--- a/oprofile_map_events.pl
++++ /dev/null
+@@ -1,151 +0,0 @@
+-#!/usr/bin/perl
+-# This script attempts to map a high-level CPU event to the oprofile counter
+-# of the current CPU
+-# Licensed under LGPL 2.1 as packaged with libhugetlbfs
+-# (c) Mel Gorman 2008
+-
+-use Getopt::Long;
+-use FindBin qw($Bin);
+-use lib "$Bin";
+-
+-use TLBC::Report;
+-use strict;
+-
+-my ($arch, $cputype);
+-my $opt_verbose;
+-my $opt_event;
+-my $opt_cycle_factor=1;
+-my $opt_event_factor=1;
+-my $p = "oprofile_map_events.pl";
+-
+-my $oprofile_event;
+-my (%map_event_name, %map_event_mask);
+-
+-# CPU events miss table
+-$map_event_name{"i386##timer"} = "CPU_CLK_UNHALTED:6000";
+-$map_event_name{"i386##dtlb_miss"} = "PAGE_WALK_TYPE:100000:0x01";
+-$map_event_name{"i386##p4##timer"} = "GLOBAL_POWER_EVENTS:100000:0x01";
+-$map_event_name{"i386##p4##dtlb_miss"} = "PAGE_WALK_TYPE:3000:0x01";
+-$map_event_name{"i386##p4##l2cache_miss"} = "BSQ_CACHE_REFERENCE:3000:0x300";
+-$map_event_name{"i386##p4-ht##timer"} = "GLOBAL_POWER_EVENTS:6000:0x01";
+-$map_event_name{"i386##p4-ht##dtlb_miss"} = "PAGE_WALK_TYPE:3000:0x01";
+-$map_event_name{"i386##p4-ht##l2cache_miss"} = "BSQ_CACHE_REFERENCE:6000:0x300";
+-$map_event_name{"i386##core##timer"} = "CPU_CLK_UNHALTED:6000";
+-$map_event_name{"i386##core##dtlb_miss"} = "DTLB_MISS:500";
+-$map_event_name{"i386##core##instructions"} = "INST_RETIRED:6000";
+-$map_event_name{"i386##core_2##dtlb_miss"} = "DTLB_MISSES:500:0x01";
+-$map_event_name{"i386##core_2##timer"} = "CPU_CLK_UNHALTED:6000";
+-$map_event_name{"i386##core_2##instructions"} = "INST_RETIRED_ANY_P:6000";
+-$map_event_name{"i386##core_7##dtlb_miss"} = "DTLB_LOAD_MISSES:6000:0x01";
+-$map_event_name{"i386##core_7##l2cache_miss"} = "LLC_MISSES:6000";
+-$map_event_name{"i386##core_7##timer"} = "CPU_CLK_UNHALTED:6000";
+-$map_event_name{"i386##core_7##instructions"} = "INST_RETIRED:6000:0x01";
+-$map_event_name{"x86-64##timer"} = "CPU_CLK_UNHALTED:100000";
+-$map_event_name{"x86-64##hammer##dtlb_miss"} = "L1_AND_L2_DTLB_MISSES:100000";
+-$map_event_name{"x86-64##hammer##l1cache_miss"} = "DATA_CACHE_MISSES:500";
+-$map_event_name{"x86-64##hammer##l2cache_miss"} = "L2_CACHE_MISS:500";
+-$map_event_name{"x86-64##family10##dtlb_miss"} = "L1_DTLB_AND_L2_DTLB_MISS:500";
+-$map_event_name{"x86-64##family10##l1cache_miss"} = "DATA_CACHE_MISSES:500";
+-$map_event_name{"x86-64##family10##l2cache_miss"} = "L2_CACHE_MISS:500";
+-$map_event_name{"x86-64##core_2##dtlb_miss"} = "DTLB_MISSES:500:0x01";
+-$map_event_name{"x86-64##core_2##timer"} = "CPU_CLK_UNHALTED:6000";
+-$map_event_name{"x86-64##core_2##instructions"} = "INST_RETIRED_ANY_P:6000";
+-$map_event_name{"ppc64##timer"} = "CYCLES:10000";
+-$map_event_name{"ppc64##dtlb_miss"} = "PM_DTLB_MISS_GRP44:100000";
+-$map_event_name{"ppc64##timer30"} = "PM_CYC_GRP30:10000";
+-$map_event_name{"ppc64##tablewalk_cycles"} = "PM_DATA_TABLEWALK_CYC_GRP30:1000";
+-$map_event_name{"ppc64##970MP##timer"} = "PM_CYC_GRP22:10000";
+-$map_event_name{"ppc64##970MP##dtlb_miss"} = "PM_DTLB_MISS_GRP22:1000";
+-$map_event_name{"ppc64##970MP##l1cache_ld_miss"} = "PM_LD_MISS_L1_GRP22:1000";
+-$map_event_name{"ppc64##970MP##l1cache_st_miss"} = "PM_ST_MISS_L1_GRP22:1000";
+-$map_event_name{"ppc64##970MP##timer50"} = "PM_CYC_GRP50:10000";
+-$map_event_name{"ppc64##970MP##l1l2cache_miss"} = "PM_DATA_FROM_MEM_GRP50:1000";
+-$map_event_name{"ppc64##970MP##timer30"} = "PM_CYC_GRP30:10000";
+-$map_event_name{"ppc64##970MP##tablewalk_cycles"} = "PM_DATA_TABLEWALK_CYC_GRP30:1000";
+-$map_event_name{"ppc64##power5##dtlb_miss"} = "PM_DTLB_MISS_GRP44:100000";
+-$map_event_name{"ppc64##power5##tablewalk_cycles"} = "PM_DATA_TABLEWALK_CYC_GRP44:1000";
+-$map_event_name{"ppc64##power4##dtlb_miss"} = "PM_DTLB_MISS_GRP9:1000";
+-$map_event_name{"ppc64##power4##tablewalk_cycles"} = "PM_DATA_TABLEWALK_CYC_GRP9:1000";
+-$map_event_name{"ppc64##power6##dtlb_miss"} = "PM_LSU_DERAT_MISS_GRP76:1000";
+-$map_event_name{"ppc64##power6##tablewalk_cycles"} = "PM_LSU_DERAT_MISS_CYC_GRP76:1000";
+-$map_event_name{"ppc64##power7##timer"} = "PM_RUN_CYC_GRP12:10000";
+-$map_event_name{"ppc64##power7##timer30"} = "PM_RUN_CYC_GRP86:10000";
+-$map_event_name{"ppc64##power7##dtlb_miss"} = "PM_DTLB_MISS_GRP12:1000";
+-$map_event_name{"ppc64##power7##tablewalk_cycles"} = "PM_DATA_TABLEWALK_CYC_GRP86:1000";
+-
+-GetOptions(
+-	'verbose'			=>	\$opt_verbose,
+-	'sample-cycle-factor|c=n'	=>	\$opt_cycle_factor,
+-	'sample-event-factor|e=n'	=>	\$opt_event_factor,
+-	'event|e=s'			=>	\$opt_event,
+-	);
+-setVerbose if $opt_verbose;
+-
+-if ($opt_event eq "" || $opt_event eq "default") {
+-	print "default\n";
+-	exit(0);
+-}
+-
+-# Run --list-events to setup devices
+-open (SETUP, "opcontrol --list-events|") || die("Failed to exec opcontrol");
+-printVerbose("$p\::init list-events\n");
+-while (!eof(SETUP)) {
+-	$_ = <SETUP>;
+-}
+-close(SETUP);
+-
+-# Read the arch and CPU type
+-open (CPUTYPE, "/proc/sys/dev/oprofile/cpu_type") ||
+-	open (CPUTYPE, "/dev/oprofile/cpu_type") ||
+-		die("Failed to open cpu_type oprofile device");
+-($arch, $cputype) = split(/\//, <CPUTYPE>);
+-close CPUTYPE;
+-printVerbose("$p\::arch = $arch\n");
+-printVerbose("$p\::cputype = $cputype\n");
+-printVerbose("$p\::event = $opt_event\n");
+-
+-# Lookup the event for the processor
+-$oprofile_event = $map_event_name{"$arch##$cputype##$opt_event"};
+-printVerbose("$p\::lookup $arch##$cputype##$opt_event = $oprofile_event\n");
+-if ($oprofile_event eq "") {
+-	$oprofile_event = $map_event_name{"$arch##$opt_event"};
+-	printVerbose("$p\:: lookup $arch##$opt_event = $oprofile_event\n");
+-}
+-
+-# If unknown, exit with failure
+-if ($oprofile_event eq "") {
+-	print "UNKNOWN_EVENT\n";
+-	exit(-2);
+-}
+-
+-# Apply the sampling factor if specified
+-if ($opt_cycle_factor != 1 || $opt_event_factor != 1) {
+-	my ($event, $sample, $mask) = split(/:/, $oprofile_event);
+-
+-	if ($opt_event =~ /^timer[0-9]*/) {
+-		$sample *= $opt_cycle_factor;
+-	} else {
+-		$sample *= $opt_event_factor;
+-	}
+-	if ($mask eq "") {
+-		$oprofile_event = "$event:$sample";
+-	} else {
+-		$oprofile_event = "$event:$sample:$mask";
+-	}
+-}
+-
+-# Verify opcontrol agrees
+-open (VERIFY, "opcontrol --list-events|") || die("Failed to exec opcontrol");
+-my ($oprofile_event_name) = split(/:/, $oprofile_event);
+-printVerbose("$p\::checking $oprofile_event_name\n");
+-while (!eof(VERIFY)) {
+-	if (<VERIFY> =~ /^$oprofile_event_name:/) {
+-		close(VERIFY);
+-		print "$oprofile_event\n";
+-		exit(0);
+-	}
+-}
+-close(VERIFY);
+-printVerbose("$p\::opcontrol --list-events disagrees\n");
+-print "UNKNOWN_OPROFILE_DISPARITY\n";
+-exit(-3);
+diff --git a/oprofile_start.sh b/oprofile_start.sh
+deleted file mode 100755
+index 9c2d95d..0000000
+--- a/oprofile_start.sh
++++ /dev/null
+@@ -1,85 +0,0 @@
+-#!/bin/bash
+-# Script to start oprofile
+-
+-usage() {
+-	echo "oprofile_start.sh (c) Mel Gorman 2008"
+-	echo This script starts the oprofile daemon
+-	echo
+-	echo "Usage: oprofile_start.sh [options]"
+-	echo "    --event               High-level oprofile event to track"
+-	echo "    --vmlinux             Path to vmlinux"
+-	echo "    --sample-cycle-factor Factor which to slow down CPU cycle sampling by"
+-	echo "    --sample-event-factor Factor which to slow down event sampling by"
+-	echo "    --systemmap           Guess"
+-	echo "    -h, --help            Print this help message"
+-	echo
+-	exit
+-}
+-
+-# Parse command-line arguements
+-SCRIPTROOT=`echo $0 | sed -e 's/oprofile_start.sh$//' | sed -e 's/^\.\///'`
+-EVENT=default
+-VMLINUX=/boot/vmlinux-`uname -r`
+-SYSTEMMAP=/boot/System.map-`uname -r`
+-FACTOR=
+-export PATH=$SCRIPTROOT:$PATH
+-ARGS=`getopt -o h --long help,event:,vmlinux:,systemmap:,sample-event-factor:,sample-cycle-factor: -n oprofile_start.sh -- "$@"`
+-
+-# Cycle through arguements
+-eval set -- "$ARGS"
+-while true ; do
+-  case "$1" in
+-	--event)               EVENTS="$EVENTS $2"; shift 2;;
+-	--vmlinux)             VMLINUX=$2; shift 2;;
+-	--sample-cycle-factor) CYCLE_FACTOR="--sample-cycle-factor $2"; shift 2;;
+-	--sample-event-factor) EVENT_FACTOR="--sample-event-factor $2"; shift 2;;
+-	--systemmap)           SYSTEMMAP=$2; shift 2;;
+-        -h|--help) usage;;
+-        *) shift 1; break;;
+-  esac
+-done
+-
+-# Map the events
+-for EVENT in $EVENTS; do
+-	LOWLEVEL_EVENT="$LOWLEVEL_EVENT --event `oprofile_map_events.pl $EVENT_FACTOR $CYCLE_FACTOR --event $EVENT`"
+-	if [ $? -ne 0 ]; then
+-		echo Failed to map event $EVENT to low-level oprofile event. Verbose output follows
+-		oprofile_map_events.pl --event $EVENT --verbose
+-		exit -1
+-	fi
+-done
+-
+-# Check vmlinux file exists
+-if [ "$VMLINUX" = "" -o ! -e $VMLINUX ]; then
+-	echo vmlinux file \"$VMLINUX\" does not exist
+-	exit -1
+-fi
+-
+-echo Stage 1: Shutting down if running and resetting
+-bash opcontrol --reset
+-bash opcontrol --stop
+-bash opcontrol --reset
+-bash opcontrol --deinit
+-echo
+-
+-# Setup the profiler
+-echo Stage 2: Setting up oprofile
+-echo High-level event: $EVENTS
+-echo Low-level event: `echo $LOWLEVEL_EVENT | sed -e 's/--event //'`
+-echo vmlinux: $VMLINUX
+-echo opcontrol --setup $LOWLEVEL_EVENT --vmlinux=$VMLINUX
+-bash opcontrol --setup $LOWLEVEL_EVENT --vmlinux=$VMLINUX
+-if [ $? -ne 0 ]; then
+-	echo opcontrol --setup returned failed
+-	exit -1
+-fi
+-
+-# Start the profiler
+-echo Stage 3: Starting profiler
+-bash opcontrol --start
+-if [ $? -ne 0 ]; then
+-	echo opcontrol --start returned failure
+-	exit -1
+-fi
+-
+-exit 0

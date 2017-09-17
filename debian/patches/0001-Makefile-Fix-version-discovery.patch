@@ -1,0 +1,33 @@
+From: Punit Agrawal <punitagrawal@gmail.com>
+Date: Sat, 18 Feb 2017 08:29:55 +0000
+Subject: Makefile: Fix version discovery
+
+Upstream uses git based discovery to generate versioning information
+for release tar balls. The invocation of the version generation script
+(localversion) doesn't work with packaging that lives in git
+repositories.
+
+Fix this by moving the relevant bits of versioning to the Makefile.
+---
+ Makefile | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 73ebad7..57e8c16 100644
+--- a/Makefile
++++ b/Makefile
+@@ -273,11 +273,10 @@ $(OBJDIRS): %:
+ 	@mkdir -p $@
+ 
+ # <Version handling>
+-$(VERSION): always
++$(VERSION): version
+ 	@$(VECHO) VERSION
+-	./localversion version $(SOURCE)
+-always:
+-# </Version handling>
++	printf "// %s\n" "`cat $?`" > $@
++	printf "#define VERSION \"%s\"\n" "`cat $?`" >> $@
+ 
+ snapshot: $(VERSION)
+ 
