@@ -1,0 +1,35 @@
+From: Punit Agrawal <punitagrawal@gmail.com>
+Date: Mon, 18 Sep 2017 22:51:07 +0100
+Subject: Append version to soname
+
+---
+ Makefile | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index a4237f6..4c8d05d 100644
+--- a/Makefile
++++ b/Makefile
+@@ -23,6 +23,8 @@ SOURCE = $(shell find . -maxdepth 1 ! -name version.h -a -name '*.[h]')
+ SOURCE += *.c *.lds Makefile
+ NODEPTARGETS=<version.h> <clean>
+ 
++SOVERSION=0
++
+ INSTALL = install
+ 
+ LDFLAGS += -ldl
+@@ -305,11 +307,11 @@ obj64/libhugetlbfs.a: $(LIBOBJS64)
+ 
+ obj32/libhugetlbfs.so: $(LIBOBJS32)
+ 	@$(VECHO) LD32 "(shared)" $@
+-	$(CC32) $(LDFLAGS) -Wl,--version-script=version.lds -Wl,-soname,$(notdir $@) -shared -o $@ $^ $(LDLIBS)
++	$(CC32) $(LDFLAGS) -Wl,--version-script=version.lds -Wl,-soname,$(notdir $@).$(SOVERSION) -shared -o $@ $^ $(LDLIBS)
+ 
+ obj64/libhugetlbfs.so: $(LIBOBJS64)
+ 	@$(VECHO) LD64 "(shared)" $@
+-	$(CC64) $(LDFLAGS) -Wl,--version-script=version.lds -Wl,-soname,$(notdir $@) -shared -o $@ $^ $(LDLIBS)
++	$(CC64) $(LDFLAGS) -Wl,--version-script=version.lds -Wl,-soname,$(notdir $@).$(SOVERSION) -shared -o $@ $^ $(LDLIBS)
+ 
+ #obj32/libhugetlbfs_privutils.a: $(LIBPUOBJS:%=obj32/%)
+ #	@$(VECHO) AR32 $@

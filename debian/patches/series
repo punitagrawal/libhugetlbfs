@@ -4,3 +4,4 @@
 0004-set-noexec-markers-in-the-asm-file-directly.patch
 0005-Remove-bit-rotting-scripts.patch
 0006-Remove-man-page-for-non-existent-executable.patch
+0007-Add-soname-version.patch
