@@ -1,3 +1,12 @@
+libhugetlbfs (2.20-2) unstable; urgency=medium
+
+  * Drop dependency on dh-exec
+  * Mark libhugetlbfs-dev to be Architecture: same
+  * Update Standards-Version to 4.1.1
+  * Provide links to package repository
+
+ -- Punit Agrawal <punit@debian.org>  Thu, 26 Oct 2017 22:12:46 +0100
+
 libhugetlbfs (2.20-1) unstable; urgency=medium
 
   * Initial release (Closes: #533708)
