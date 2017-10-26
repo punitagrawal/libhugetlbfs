@@ -1,0 +1,5 @@
+libhugetlbfs (2.20-1) experimental; urgency=medium
+
+  * Initial release (Closes: #533708)
+
+ -- Punit Agrawal <punit@debian.org>  Thu, 21 Sep 2017 21:24:46 +0000
