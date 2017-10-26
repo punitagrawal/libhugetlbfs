@@ -12,6 +12,7 @@ Homepage: https://github.com/libhugetlbfs/libhugetlbfs
 Package: libhugetlbfs-dev
 Section: libdevel
 Architecture: any
+Multi-Arch: same
 Depends: ${misc:Depends},
  libhugetlbfs0 (= ${binary:Version})
 Description: Development files to build programs using libhugetlbfs
