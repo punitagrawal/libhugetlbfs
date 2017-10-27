@@ -1,3 +1,9 @@
+libhugetlbfs (2.20-3) unstable; urgency=medium
+
+  * Restrict build architectures (Closes: #879939)
+
+ -- Punit Agrawal <punit@debian.org>  Fri, 27 Oct 2017 22:11:38 +0100
+
 libhugetlbfs (2.20-2) unstable; urgency=medium
 
   * Drop dependency on dh-exec
