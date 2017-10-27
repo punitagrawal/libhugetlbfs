@@ -11,7 +11,7 @@ Vcs-Browser: https://github.com/punitagrawal/libhugetlbfs.git
 
 Package: libhugetlbfs-dev
 Section: libdevel
-Architecture: any
+Architecture: amd64 arm64 armhf armel i386 ia64 ppc64el s390x powerpc ppc64 sparc64
 Multi-Arch: same
 Depends: ${misc:Depends},
  libhugetlbfs0 (= ${binary:Version})
@@ -43,7 +43,7 @@ Description: Preload library to back program memory with hugepages
 
 Package: libhugetlbfs-bin
 Section: utils
-Architecture: any
+Architecture: amd64 arm64 armhf armel i386 ia64 ppc64el s390x powerpc ppc64 sparc64
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Suggests: libhugetlbfs
 Description: Tools to ease use of hugetlbfs
