@@ -28,7 +28,7 @@ Description: Development files to build programs using libhugetlbfs
  This package ships the library development files.
 
 Package: libhugetlbfs0
-Architecture: any
+Architecture: amd64 arm64 armhf armel i386 ia64 ppc64el s390x powerpc ppc64 sparc64
 Multi-Arch: same
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Preload library to back program memory with hugepages
