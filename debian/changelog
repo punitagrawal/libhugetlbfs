@@ -1,3 +1,9 @@
+libhugetlbfs (2.20-4) unstable; urgency=medium
+
+  * Restrict Architecture on all binary packages
+
+ -- Punit Agrawal <punit@debian.org>  Sat, 28 Oct 2017 07:03:56 +0100
+
 libhugetlbfs (2.20-3) unstable; urgency=medium
 
   * Restrict build architectures (Closes: #879939)
