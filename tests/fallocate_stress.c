@@ -19,12 +19,14 @@
 #define _GNU_SOURCE
 
 #include <stdio.h>
+#include <linux/falloc.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <linux/falloc.h>
 
 #include <hugetlbfs.h>
 

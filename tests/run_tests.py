@@ -6,6 +6,7 @@ import os
 import sys
 import getopt
 import resource
+import errno
 
 # The superset of wordsizes that should be tested (default 32, 64)
 wordsizes = set()
@@ -33,7 +34,7 @@ mounts = []
 #   The indexed value is the number of tests matching the above traits
 R = {}
 result_types = ("total", "pass", "config", "fail", "xfail", "xpass",
-                "signal", "strange", "skip")
+                "signal", "strange", "skip", "nofile")
 
 def bash(cmd):
     """
@@ -75,8 +76,8 @@ def run_test_prog(bits, pagesize, cmd, **env):
     except KeyboardInterrupt:
         # Abort and mark this a strange test result
         return (None, "")
-    except OSError:
-        return (None, "")
+    except OSError as e:
+        return (-e.errno, "")
     out = p.stdout.read().strip()
 
     if paranoid_pool_check:
@@ -167,6 +168,7 @@ def results_summary():
     print_per_size("Bad configuration", R["config"])
     print_per_size("Expected FAIL", R["xfail"])
     print_per_size("Unexpected PASS", R["xpass"])
+    print_per_size("Test not present", R["nofile"])
     print_per_size("Strange test result", R["strange"])
     print "**********"
 
@@ -327,7 +329,9 @@ def run_test(pagesize, bits, cmd, **env):
     elif rc == 2:  R["fail"][pagesize][bits] += 1
     elif rc == 3:  R["xfail"][pagesize][bits] += 1
     elif rc == 4:  R["xpass"][pagesize][bits] += 1
-    elif rc < 0: R["signal"][pagesize][bits] += 1
+    elif rc == -errno.ENOENT:
+                   R["nofile"][pagesize][bits] += 1
+    elif rc < 0:   R["signal"][pagesize][bits] += 1
     else:          R["strange"][pagesize][bits] += 1
 
 def skip_test(pagesize, bits, cmd, **env):
@@ -405,7 +409,7 @@ def elflink_rw_test(cmd, **env):
     do_test(cmd, HUGETLB_ELFMAP="no", **env)
 
     # Test we don't blow up if HUGETLB_MINIMAL_COPY is disabled
-    do_test(cmd, HUGETLB_MINIMAL_COPY="no", HUGETLB_ELFMAP=R"", **env)
+    do_test(cmd, HUGETLB_MINIMAL_COPY="no", HUGETLB_ELFMAP="R", **env)
     do_test(cmd, HUGETLB_MINIMAL_COPY="no", HUGETLB_ELFMAP="W", **env)
     do_test(cmd, HUGETLB_MINIMAL_COPY="no", HUGETLB_ELFMAP="RW", **env)
 
@@ -568,15 +572,42 @@ def functional_tests():
     do_test("malloc_manysmall")
     do_test("malloc_manysmall", LD_PRELOAD="libhugetlbfs.so",
             HUGETLB_MORECORE="yes")
-    do_test("heapshrink")
-    do_test("heapshrink", LD_PRELOAD="libheapshrink.so")
-    do_test("heapshrink", LD_PRELOAD="libhugetlbfs.so", HUGETLB_MORECORE="yes")
-    do_test("heapshrink", LD_PRELOAD="libhugetlbfs.so libheapshrink.so",
+
+    # After upstream commit: (glibc-2.25.90-688-gd5c3fafc43) glibc has a
+    # new per-thread caching mechanism that will NOT allow heapshrink test to
+    # successfully measure if heap has shrunk or not due to the fact that
+    # heap won't have its sized reduced right away.
+    #
+    # In order to disable it, you need to have the tunable GLIBC in place.
+    # Unfortunately, it requires to be set before program is loaded, as an
+    # environment variable, since we can't re-initialize malloc() from the
+    # program context (not even with a constructor function), and the tunable
+    # is only evaluated during malloc() initialization.
+
+    do_test("heapshrink",
+            GLIBC_TUNABLES="glibc.malloc.tcache_count=0")
+    do_test("heapshrink",
+            GLIBC_TUNABLES="glibc.malloc.tcache_count=0",
+            LD_PRELOAD="libheapshrink.so")
+    do_test("heapshrink",
+            GLIBC_TUNABLES="glibc.malloc.tcache_count=0",
+            LD_PRELOAD="libhugetlbfs.so",
             HUGETLB_MORECORE="yes")
-    do_test("heapshrink", LD_PRELOAD="libheapshrink.so", HUGETLB_MORECORE="yes",
+    do_test("heapshrink",
+            GLIBC_TUNABLES="glibc.malloc.tcache_count=0",
+            LD_PRELOAD="libhugetlbfs.so libheapshrink.so",
+            HUGETLB_MORECORE="yes")
+    do_test("heapshrink",
+            GLIBC_TUNABLES="glibc.malloc.tcache_count=0",
+            LD_PRELOAD="libheapshrink.so",
+            HUGETLB_MORECORE="yes",
             HUGETLB_MORECORE_SHRINK="yes")
-    do_test("heapshrink", LD_PRELOAD="libhugetlbfs.so libheapshrink.so",
-            HUGETLB_MORECORE="yes", HUGETLB_MORECORE_SHRINK="yes")
+    do_test("heapshrink",
+            GLIBC_TUNABLES="glibc.malloc.tcache_count=0",
+            LD_PRELOAD="libhugetlbfs.so libheapshrink.so",
+            HUGETLB_MORECORE="yes",
+            HUGETLB_MORECORE_SHRINK="yes")
+
     do_test("heap-overflow", HUGETLB_VERBOSE="1", HUGETLB_MORECORE="yes")
 
     # Run the remapping tests' up-front checks
@@ -654,6 +685,20 @@ def stress_tests():
 
     do_test("fallocate_stress.sh")
 
+def print_help():
+    print "Usage: %s [options]" % sys.argv[0]
+    print "Options:"
+    print "  -v	\t Verbose output."
+    print "  -V	\t Highly verbose output."
+    print "  -f	\t Force all tests."
+    print "  -t <set> 	 Run test set, allowed are func and stress."
+    print "  -b <wordsize>  Define wordsizes to be used. "
+    print "  -p <pagesize>  Define the page sizes to be used."
+    print "  -c	\t Do a paranoid pool check."
+    print "  -l	\t Use custom ld scripts."
+    print "  -h	\t This help."
+    sys.exit(0)
+
 def main():
     global wordsizes, pagesizes, dangerous, paranoid_pool_check, system_default_hpage_size
     global custom_ldscripts
@@ -666,7 +711,7 @@ def main():
     custom_ldscripts = False
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "vVfdt:b:p:c:l")
+        opts, args = getopt.getopt(sys.argv[1:], "vVft:b:p:c:lh")
     except getopt.GetoptError, err:
         print str(err)
         sys.exit(1)
@@ -688,6 +733,8 @@ def main():
            paranoid_pool_check = True
        elif opt == '-l':
            custom_ldscripts = True
+       elif opt == '-h':
+           print_help()
        else:
            assert False, "unhandled option"
     if len(testsets) == 0: testsets = set(["func", "stress"])

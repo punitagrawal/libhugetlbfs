@@ -5,9 +5,7 @@ LIBOBJS = hugeutils.o version.o init.o morecore.o debug.o alloc.o shm.o kernel-f
 LIBPUOBJS = init_privutils.o debug.o hugeutils.o kernel-features.o
 INSTALL_OBJ_LIBS = libhugetlbfs.so libhugetlbfs.a libhugetlbfs_privutils.so
 BIN_OBJ_DIR=obj
-PM_OBJ_DIR=TLBC
 INSTALL_BIN = hugectl hugeedit hugeadm pagesize
-INSTALL_SCRIPT = cpupcstat oprofile_map_events.pl oprofile_start.sh
 INSTALL_HELPER = huge_page_setup_helper.py
 INSTALL_PERLMOD = DataCollect.pm OpCollect.pm PerfCollect.pm Report.pm
 INSTALL_HEADERS = hugetlbfs.h
@@ -27,12 +25,12 @@ NODEPTARGETS=<version.h> <clean>
 
 INSTALL = install
 
-LDFLAGS += -Wl,-z,noexecstack -ldl
+LDFLAGS += -ldl
 CFLAGS ?= -O2 -g
 CFLAGS += -Wall -fPIC
 CPPFLAGS += -D__LIBHUGETLBFS__
 
-ARCH = $(shell uname -m | sed -e s/i.86/i386/)
+ARCH ?= $(shell uname -m | sed -e s/i.86/i386/)
 CC ?= gcc
 
 CUSTOM_LDSCRIPTS = yes
@@ -192,11 +190,6 @@ LDSCRIPTDIR = $(PREFIX)/share/libhugetlbfs/ldscripts
 BINDIR = $(PREFIX)/share/libhugetlbfs
 EXEDIR = $(PREFIX)/bin
 DOCDIR = $(PREFIX)/share/doc/libhugetlbfs
-ifdef CC32
-PMDIR = $(LIBDIR32)/perl5/TLBC
-else
-PMDIR = $(LIBDIR64)/perl5/TLBC
-endif
 MANDIR1 = $(PREFIX)/share/man/man1
 MANDIR3 = $(PREFIX)/share/man/man3
 MANDIR7 = $(PREFIX)/share/man/man7
@@ -363,24 +356,24 @@ $(BIN_OBJ_DIR)/%.o: %.c
 $(BIN_OBJ_DIR)/hugectl: $(BIN_OBJ_DIR)/hugectl.o
 	@$(VECHO) LDHOST $@
 	mkdir -p $(BIN_OBJ_DIR)
-	$(CCBIN) $(CPPFLAGS) $(CFLAGS) -o $@ $^
+	$(CCBIN) $(CPPFLAGS) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 $(BIN_OBJ_DIR)/hugeedit: $(BIN_OBJ_DIR)/hugeedit.o
 	@$(VECHO) LDHOST $@
 	mkdir -p $(BIN_OBJ_DIR)
-	$(CCBIN) $(CPPFLAGS) $(CFLAGS) $(LIBPATHS) -o $@ $^
+	$(CCBIN) $(CPPFLAGS) $(CFLAGS) $(LIBPATHS) -o $@ $^ $(LDFLAGS)
 
 HUGEADM_OBJ=hugeadm.o libhugetlbfs_privutils.a
 $(BIN_OBJ_DIR)/hugeadm: $(foreach file,$(HUGEADM_OBJ),$(BIN_OBJ_DIR)/$(file))
 	@$(VECHO) LDHOST $@
 	mkdir -p $(BIN_OBJ_DIR)
-	$(CCBIN) $(CPPFLAGS) $(CFLAGS) $(LIBPATHS) -o $@ $^
+	$(CCBIN) $(CPPFLAGS) $(CFLAGS) $(LIBPATHS) -o $@ $^ $(LDFLAGS)
 
 PAGESIZE_OBJ=pagesize.o libhugetlbfs_privutils.a
 $(BIN_OBJ_DIR)/pagesize: $(foreach file,$(PAGESIZE_OBJ),$(BIN_OBJ_DIR)/$(file))
 	@$(VECHO) LDHOST $@
 	mkdir -p $(BIN_OBJ_DIR)
-	$(CCBIN) $(CPPFLAGS) $(CFLAGS) $(LIBPATHS) -o $@ $^
+	$(CCBIN) $(CPPFLAGS) $(CFLAGS) $(LIBPATHS) -o $@ $^ $(LDFLAGS)
 
 clean:
 	@$(VECHO) CLEAN
@@ -462,19 +455,7 @@ install-bin:
 	for x in $(INSTALL_BIN); do \
 		$(INSTALL) -m 755 $(BIN_OBJ_DIR)/$$x $(DESTDIR)$(EXEDIR); done
 
-install-stat: install-perlmod
-	@$(VECHO) INSTALL_SCRIPT $(DESTDIR)$(EXEDIR)
-	$(INSTALL) -d $(DESTDIR)$(EXEDIR)
-	for x in $(INSTALL_SCRIPT); do \
-		$(INSTALL) -m 755 $$x $(DESTDIR)$(EXEDIR); done
-
-install-perlmod:
-	@$(VECHO) INSTALL_PERLMOD $(DESTDIR)$(PMDIR)
-	$(INSTALL) -d $(DESTDIR)$(PMDIR)
-	for x in $(INSTALL_PERLMOD); do \
-		$(INSTALL) -m 644 $(PM_OBJ_DIR)/$$x $(DESTDIR)$(PMDIR); done
-
-install: install-libs install-bin install-man install-stat
+install: install-libs install-bin install-man
 
 install-helper:
 	@$(VECHO) INSTALL_HELPER $(DESTDIR)$(EXEDIR)
