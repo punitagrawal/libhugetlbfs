@@ -1,6 +1,7 @@
 *.d
-*.o
-*.a
-*.so
 *~
-.pc
+version.h
+version
+obj32
+obj64
+obj
