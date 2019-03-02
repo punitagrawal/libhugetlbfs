@@ -11,7 +11,7 @@ purged. Fix this by dropping the man page as well.
  delete mode 100644 man/cpupcstat.8
 
 diff --git a/Makefile b/Makefile
-index 51267cc..a4237f6 100644
+index 9b8c4ea..ba8e4a8 100644
 --- a/Makefile
 +++ b/Makefile
 @@ -14,7 +14,7 @@ INSTALL_MAN3 = get_huge_pages.3 get_hugepage_region.3 gethugepagesize.3 \

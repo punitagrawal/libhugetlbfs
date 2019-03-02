@@ -1,7 +1,3 @@
 0001-Makefile-Fix-version-discovery.patch
-0002-manpages-Correct-section-for-hugeedit-manpage.patch
-0003-respect-user-LDFLAGS-when-linking-apps.patch
-0004-set-noexec-markers-in-the-asm-file-directly.patch
-0005-Remove-bit-rotting-scripts.patch
-0006-Remove-man-page-for-non-existent-executable.patch
-0007-Add-soname-version.patch
+0002-Remove-man-page-for-non-existent-executable.patch
+0003-Append-version-to-soname.patch

@@ -1,5 +1,5 @@
 From: Punit Agrawal <punitagrawal@gmail.com>
-Date: Sat, 18 Feb 2017 08:29:55 +0000
+Date: Sun, 3 Mar 2019 09:16:24 +0900
 Subject: Makefile: Fix version discovery
 
 Upstream uses git based discovery to generate versioning information
@@ -9,25 +9,35 @@ repositories.
 
 Fix this by moving the relevant bits of versioning to the Makefile.
 ---
- Makefile | 7 +++----
- 1 file changed, 3 insertions(+), 4 deletions(-)
+ Makefile | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
 
 diff --git a/Makefile b/Makefile
-index 73ebad7..57e8c16 100644
+index 51e41f0..9b8c4ea 100644
 --- a/Makefile
 +++ b/Makefile
-@@ -273,11 +273,10 @@ $(OBJDIRS): %:
+@@ -23,6 +23,8 @@ SOURCE = $(shell find . -maxdepth 1 ! -name version.h -a -name '*.[h]')
+ SOURCE += *.c *.lds Makefile
+ NODEPTARGETS=<version.h> <clean>
+ 
++REL_VERSION=2.21
++
+ INSTALL = install
+ 
+ LDFLAGS += -ldl
+@@ -266,11 +268,11 @@ $(OBJDIRS): %:
  	@mkdir -p $@
  
  # <Version handling>
 -$(VERSION): always
-+$(VERSION): version
++$(VERSION): FORCE
  	@$(VECHO) VERSION
 -	./localversion version $(SOURCE)
 -always:
 -# </Version handling>
-+	printf "// %s\n" "`cat $?`" > $@
-+	printf "#define VERSION \"%s\"\n" "`cat $?`" >> $@
++	printf "// %s\n" "${REL_VERSION}" > $@
++	printf "#define VERSION \"%s\"\n" "${REL_VERSION}" >> $@
++FORCE:
  
  snapshot: $(VERSION)
  
