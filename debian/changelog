@@ -1,3 +1,10 @@
+libhugetlbfs (2.21-1) unstable; urgency=medium
+
+  * New upstream version 2.21
+  * Install executable script to /usr/bin
+
+ -- Punit Agrawal <punit@debian.org>  Sun, 24 Mar 2019 08:24:30 +0900
+
 libhugetlbfs (2.20-4) unstable; urgency=medium
 
   * Restrict Architecture on all binary packages
