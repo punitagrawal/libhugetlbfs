@@ -1,4 +1,4 @@
 usr/share/libhugetlbfs/ldscripts
-usr/share/libhugetlbfs/ld.hugetlbfs
+usr/share/libhugetlbfs/ld.hugetlbfs usr/bin
 usr/lib/*/libhugetlbfs-*.so
 usr/lib/*/libhugetlbfs.so.*
