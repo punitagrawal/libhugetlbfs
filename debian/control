@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Punit Agrawal <punit@debian.org>
 Build-Depends: debhelper (>= 10),
  python-minimal, libpython2.7-stdlib
-Standards-Version: 4.1.1
+Standards-Version: 4.4.0
 Homepage: https://github.com/libhugetlbfs/libhugetlbfs
 Vcs-Git: https://github.com/punitagrawal/libhugetlbfs.git
 Vcs-Browser: https://github.com/punitagrawal/libhugetlbfs.git
