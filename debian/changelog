@@ -1,3 +1,9 @@
+libhugetlbfs (2.21-3) unstable; urgency=medium
+
+  * Add Breaks+Replaces tag for libhugetlbfs-bin (Closes: #938953)
+
+ -- Punit Agrawal <punit@debian.org>  Sun, 08 Sep 2019 07:36:09 +0900
+
 libhugetlbfs (2.21-2) unstable; urgency=medium
 
   * Move ld.hugetlbfs to libhugetlbfs-bin
