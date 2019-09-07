@@ -45,6 +45,8 @@ Package: libhugetlbfs-bin
 Section: utils
 Architecture: amd64 arm64 armhf armel i386 ia64 ppc64el s390x powerpc ppc64 sparc64
 Depends: ${shlibs:Depends}, ${misc:Depends}
+Breaks: libhugetlbfs0 (<< 2.21-3)
+Replaces: libhugetlbfs0 (<< 2.21-3)
 Suggests: libhugetlbfs
 Description: Tools to ease use of hugetlbfs
  libhugetlbfs is a library which provides easy access to huge pages of
