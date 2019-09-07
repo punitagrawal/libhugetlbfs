@@ -1,3 +1,9 @@
+libhugetlbfs (2.21-4) unstable; urgency=medium
+
+  * Correct version of Breaks+Replaces tags
+
+ -- Punit Agrawal <punit@debian.org>  Sun, 08 Sep 2019 08:52:28 +0900
+
 libhugetlbfs (2.21-3) unstable; urgency=medium
 
   * Add Breaks+Replaces tag for libhugetlbfs-bin (Closes: #938953)
