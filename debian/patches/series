@@ -1,3 +1,2 @@
 0001-Makefile-Fix-version-discovery.patch
-0002-Remove-man-page-for-non-existent-executable.patch
-0003-Append-version-to-soname.patch
+0002-Append-version-to-soname.patch
