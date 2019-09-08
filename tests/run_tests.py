@@ -1,4 +1,7 @@
-#! /usr/bin/env python
+#! /usr/bin/python3
+
+from __future__ import print_function
+from __future__ import division
 
 import subprocess
 import types
@@ -46,7 +49,7 @@ def bash(cmd):
     except KeyboardInterrupt:
         # Abort and mark this a strange test result
         return (127, "")
-    out = p.stdout.read().strip()
+    out = p.stdout.read().decode().strip()
     return (rc, out)
 
 def snapshot_pool_state():
@@ -60,7 +63,7 @@ def snapshot_pool_state():
 def run_test_prog(bits, pagesize, cmd, **env):
     if paranoid_pool_check:
         beforepool = snapshot_pool_state()
-        print "Pool state: %s" % str(beforepool)
+        print("Pool state: %s" % str(beforepool))
 
     local_env = os.environ.copy()
     local_env.update(env)
@@ -78,14 +81,14 @@ def run_test_prog(bits, pagesize, cmd, **env):
         return (None, "")
     except OSError as e:
         return (-e.errno, "")
-    out = p.stdout.read().strip()
+    out = p.stdout.read().decode().strip()
 
     if paranoid_pool_check:
         afterpool = snapshot_pool_state()
         if afterpool != beforepool:
-            print >>sys.stderr, "Hugepage pool state not preserved!"
-            print >>sys.stderr, "BEFORE: %s" % str(beforepool)
-            print >>sys.stderr, "AFTER: %s" % str(afterpool)
+            print("Hugepage pool state not preserved!", file=sys.stderr)
+            print("BEFORE: %s" % str(beforepool), file=sys.stderr)
+            print("AFTER: %s" % str(afterpool), file=sys.stderr)
             sys.exit(98)
 
     return (rc, out)
@@ -143,22 +146,24 @@ def print_per_size(title, values):
     Print the results of a given result type on one line.  The results for all
     page sizes and word sizes are written in a table format.
     """
-    print "*%20s: " % title,
+    print("*%20s: " % title, end=" ")
     for sz in pagesizes:
-        print "%4s   %4s   " % (values[sz][32], values[sz][64]),
-    print
+        print("%4s   %4s   " % (values[sz][32], values[sz][64]), end="")
+    print()
 
 def results_summary():
     """
     Display a summary of the test results
     """
-    print "********** TEST SUMMARY"
-    print "*%21s" % "",
-    for p in pagesizes: print "%-13s " % pretty_page_size(p),
-    print
-    print "*%21s" % "",
-    for p in pagesizes: print "32-bit 64-bit ",
-    print
+    print("********** TEST SUMMARY")
+    print("*%21s" % "", end=" ")
+    for p in pagesizes:
+        print("%-13s " % pretty_page_size(p), end="")
+    print()
+    print("*%21s" % "", end=" ")
+    for p in pagesizes:
+        print("32-bit 64-bit ", end="")
+    print()
 
     print_per_size("Total testcases", R["total"])
     print_per_size("Skipped", R["skip"])
@@ -170,28 +175,34 @@ def results_summary():
     print_per_size("Unexpected PASS", R["xpass"])
     print_per_size("Test not present", R["nofile"])
     print_per_size("Strange test result", R["strange"])
-    print "**********"
+    print("**********")
 
-def free_hpages():
+def free_hpages(size=None):
     """
-    Return the number of free huge pages.
+    Return the number of free huge pages for a given size. If size is not
+    passed, use the default huge page size.
 
-    Parse /proc/meminfo to obtain the number of free huge pages for
-    the default page size.
-    XXX: This function is not multi-size aware yet.
+    Parse /sys/kernel/mm/hugepages/hugepages-<size-in-kB>/free_hugepages to
+    obtain the number of free huge pages for the given page size.
     """
-    (rc, out) = bash("grep 'HugePages_Free:' /proc/meminfo | cut -f2 -d:")
+    if size == None: size = system_default_hpage_size
+    size_kb = size / 1024
+    cmd = "cat /sys/kernel/mm/hugepages/hugepages-%dkB/free_hugepages" % size_kb
+    (rc, out) = bash(cmd)
     return (rc, int(out))
 
-def total_hpages():
+def total_hpages(size=None):
     """
-    Return the total number of huge pages in the pool.
+    Return the total number of huge pages in the pool for a given size. If
+    size is not passed, use the default huge page size.
 
-    Parse /proc/meminfo to obtain the number of huge pages for the default
-    page size.
-    XXX: This function is not multi-size aware yet.
+    Parse /sys/kernel/mm/hugepages/hugepages-<size-in-kB>/nr_hugepages to
+    obtain the number of huge pages for the given page size.
     """
-    (rc, out) = bash("grep 'HugePages_Total:' /proc/meminfo | cut -f2 -d:")
+    if size == None: size = system_default_hpage_size
+    size_kb = size / 1024
+    cmd = "cat /sys/kernel/mm/hugepages/hugepages-%dkB/nr_hugepages" % size_kb
+    (rc, out) = bash(cmd)
     return (rc, int(out))
 
 def hpage_size():
@@ -216,7 +227,7 @@ def clear_hpages():
     cleaned up automatically and must be removed to free up the huge pages.
     """
     for mount in mounts:
-        dir = mount + "/elflink-uid-" + `os.getuid()`
+        dir = mount + "/elflink-uid-" + repr(os.getuid())
         for root, dirs, files in os.walk(dir, topdown=False):
             for name in files:
                 os.remove(os.path.join(root, name))
@@ -237,9 +248,11 @@ def get_pagesizes():
     sizes = set()
     out = ""
     (rc, out) = bash("../obj/hugeadm --page-sizes")
-    if rc != 0 or out == "": return sizes
+    if rc != 0 or out == "":
+        return sizes
 
-    for size in out.split("\n"): sizes.add(int(size))
+    for size in out.split("\n"):
+        sizes.add(int(size))
     return sizes
 
 def get_wordsizes():
@@ -270,13 +283,13 @@ def check_hugetlbfs_path():
                 okbits.append(b)
                 mounts.append(out)
         if len(okbits) == 0:
-            print "run_tests.py: No mountpoints available for page size %s" % \
-                  pretty_page_size(p)
+            print("run_tests.py: No mountpoints available for page size %s" %
+                  pretty_page_size(p))
             wordsizes_by_pagesize[p] = set()
             continue
         for b in wordsizes - set(okbits):
-            print "run_tests.py: The %i bit word size is not compatible with " \
-                  "%s pages" % (b, pretty_page_size(p))
+            print("run_tests.py: The %i bit word size is not compatible with " \
+                  "%s pages" % (b, pretty_page_size(p)))
         wordsizes_by_pagesize[p] = set(okbits)
 
 def check_linkhuge_tests():
@@ -298,10 +311,10 @@ def check_linkhuge_tests():
 
 def print_cmd(pagesize, bits, cmd, env):
     if env:
-        print ' '.join(['%s=%s' % (k, v) for k, v in env.items()]),
-    if type(cmd) != types.StringType:
+        print(' '.join(['%s=%s' % (k, v) for k, v in env.items()]), end=" ")
+    if not isinstance(cmd, str):
         cmd = ' '.join(cmd)
-    print "%s (%s: %i):\t" % (cmd, pretty_page_size(pagesize), bits),
+    print("%s (%s: %i):\t" % (cmd, pretty_page_size(pagesize), bits), end="")
     sys.stdout.flush()
 
 def run_test(pagesize, bits, cmd, **env):
@@ -321,7 +334,7 @@ def run_test(pagesize, bits, cmd, **env):
 
     print_cmd(pagesize, bits, cmd, env)
     (rc, out) = run_test_prog(bits, pagesize, cmd, **env)
-    print out
+    print(out)
 
     R["total"][pagesize][bits] += 1
     if rc == 0:    R["pass"][pagesize][bits] += 1
@@ -342,7 +355,7 @@ def skip_test(pagesize, bits, cmd, **env):
     R["total"][pagesize][bits] += 1
     R["skip"][pagesize][bits] += 1
     print_cmd(pagesize, bits, cmd, env)
-    print "SKIPPED"
+    print("SKIPPED")
 
 def do_test(cmd, bits=None, **env):
     """
@@ -362,14 +375,25 @@ def do_test_with_rlimit(rtype, limit, cmd, bits=None, **env):
     do_test(cmd, bits, **env)
     resource.setrlimit(rtype, oldlimit)
 
+def do_test_with_pagesize(pagesize, cmd, bits=None, **env):
+    """
+    Run a test case, testing with a specified huge page size and
+    each indicated word size.
+    """
+    if bits == None:
+        bits = wordsizes
+    for b in (set(bits) & wordsizes_by_pagesize[pagesize]):
+        run_test(pagesize, b, cmd, **env)
+
 def do_elflink_test(cmd, **env):
     """
     Run an elflink test case, skipping known-bad configurations.
     """
-    for p in pagesizes:
-        for b in wordsizes_by_pagesize[p]:
-            if b in linkhuge_wordsizes: run_test(p, b, cmd, **env)
-            else: skip_test(p, b, cmd, **env)
+    for b in wordsizes_by_pagesize[system_default_hpage_size]:
+        if b in linkhuge_wordsizes:
+            run_test(system_default_hpage_size, b, cmd, **env)
+        else:
+            skip_test(system_default_hpage_size, b, cmd, **env)
 
 def elflink_test(cmd, **env):
     """
@@ -378,9 +402,10 @@ def elflink_test(cmd, **env):
     Test various combinations of: preloading libhugetlbfs, B vs. BDT link
     modes, minimal copying on or off, and disabling segment remapping.
     """
-    do_test(cmd, **env)
+    do_test_with_pagesize(system_default_hpage_size, cmd, **env)
     # Test we don't blow up if not linked for hugepage
-    do_test(cmd, LD_PRELOAD="libhugetlbfs.so", **env)
+    do_test_with_pagesize(system_default_hpage_size, cmd,
+                          LD_PRELOAD="libhugetlbfs.so", **env)
 
     # Only run custom ldscript tests when -l option is set
     if not custom_ldscripts:
@@ -402,16 +427,23 @@ def elflink_rw_test(cmd, **env):
     Test various combinations of: remapping modes and minimal copy on or off.
     """
     # Basic tests: None, Read-only, Write-only, Read-Write, exlicit disable
-    do_test(cmd, **env)
-    do_test(cmd, HUGETLB_ELFMAP="R", **env)
-    do_test(cmd, HUGETLB_ELFMAP="W", **env)
-    do_test(cmd, HUGETLB_ELFMAP="RW", **env)
-    do_test(cmd, HUGETLB_ELFMAP="no", **env)
+    do_test_with_pagesize(system_default_hpage_size, cmd, **env)
+    do_test_with_pagesize(system_default_hpage_size, cmd,
+                          HUGETLB_ELFMAP="R", **env)
+    do_test_with_pagesize(system_default_hpage_size, cmd,
+                          HUGETLB_ELFMAP="W", **env)
+    do_test_with_pagesize(system_default_hpage_size, cmd,
+                          HUGETLB_ELFMAP="RW", **env)
+    do_test_with_pagesize(system_default_hpage_size, cmd,
+                          HUGETLB_ELFMAP="no", **env)
 
     # Test we don't blow up if HUGETLB_MINIMAL_COPY is disabled
-    do_test(cmd, HUGETLB_MINIMAL_COPY="no", HUGETLB_ELFMAP="R", **env)
-    do_test(cmd, HUGETLB_MINIMAL_COPY="no", HUGETLB_ELFMAP="W", **env)
-    do_test(cmd, HUGETLB_MINIMAL_COPY="no", HUGETLB_ELFMAP="RW", **env)
+    do_test_with_pagesize(system_default_hpage_size, cmd,
+                          HUGETLB_MINIMAL_COPY="no", HUGETLB_ELFMAP="R", **env)
+    do_test_with_pagesize(system_default_hpage_size, cmd,
+                          HUGETLB_MINIMAL_COPY="no", HUGETLB_ELFMAP="W", **env)
+    do_test_with_pagesize(system_default_hpage_size, cmd,
+                          HUGETLB_MINIMAL_COPY="no", HUGETLB_ELFMAP="RW", **env)
 
 def elfshare_test(cmd, **env):
     """
@@ -448,7 +480,9 @@ def elflink_rw_and_share_test(cmd, **env):
     clear_hpages()
     for mode in ("R", "W", "RW"):
         for i in range(2):
-            do_test(cmd, HUGETLB_ELFMAP=mode, HUGETLB_SHARE=repr(i), **env)
+            do_test_with_pagesize(system_default_hpage_size, cmd,
+                                  HUGETLB_ELFMAP=mode, HUGETLB_SHARE=repr(i),
+                                  **env)
         clear_hpages()
 
 def setup_shm_sysctl(limit):
@@ -466,9 +500,9 @@ def setup_shm_sysctl(limit):
         sysctls[f] = fh.read()
         fh.close()
         fh = open(f, "w")
-        fh.write(`limit`)
+        fh.write(repr(limit))
         fh.close()
-    print "set shmmax limit to %s" % limit
+    print("set shmmax limit to %s" % limit)
     return sysctls
 
 def restore_shm_sysctl(sysctls):
@@ -563,15 +597,22 @@ def functional_tests():
     do_test("private")
     do_test("fork-cow")
     do_test("direct")
-    do_test("malloc")
-    do_test("malloc", LD_PRELOAD="libhugetlbfs.so", HUGETLB_MORECORE="yes")
-    do_test("malloc", LD_PRELOAD="libhugetlbfs.so", HUGETLB_MORECORE="yes",
-            HUGETLB_RESTRICT_EXE="unknown:none")
-    do_test("malloc", LD_PRELOAD="libhugetlbfs.so", HUGETLB_MORECORE="yes",
-            HUGETLB_RESTRICT_EXE="unknown:malloc")
-    do_test("malloc_manysmall")
-    do_test("malloc_manysmall", LD_PRELOAD="libhugetlbfs.so",
-            HUGETLB_MORECORE="yes")
+    do_test_with_pagesize(system_default_hpage_size, "malloc")
+    do_test_with_pagesize(system_default_hpage_size, "malloc",
+                          LD_PRELOAD="libhugetlbfs.so",
+                          HUGETLB_MORECORE="yes")
+    do_test_with_pagesize(system_default_hpage_size, "malloc",
+                          LD_PRELOAD="libhugetlbfs.so",
+                          HUGETLB_MORECORE="yes",
+                          HUGETLB_RESTRICT_EXE="unknown:none")
+    do_test_with_pagesize(system_default_hpage_size, "malloc",
+                          LD_PRELOAD="libhugetlbfs.so",
+                          HUGETLB_MORECORE="yes",
+                          HUGETLB_RESTRICT_EXE="unknown:malloc")
+    do_test_with_pagesize(system_default_hpage_size, "malloc_manysmall")
+    do_test_with_pagesize(system_default_hpage_size, "malloc_manysmall",
+                          LD_PRELOAD="libhugetlbfs.so",
+                          HUGETLB_MORECORE="yes")
 
     # After upstream commit: (glibc-2.25.90-688-gd5c3fafc43) glibc has a
     # new per-thread caching mechanism that will NOT allow heapshrink test to
@@ -584,29 +625,29 @@ def functional_tests():
     # program context (not even with a constructor function), and the tunable
     # is only evaluated during malloc() initialization.
 
-    do_test("heapshrink",
-            GLIBC_TUNABLES="glibc.malloc.tcache_count=0")
-    do_test("heapshrink",
-            GLIBC_TUNABLES="glibc.malloc.tcache_count=0",
-            LD_PRELOAD="libheapshrink.so")
-    do_test("heapshrink",
-            GLIBC_TUNABLES="glibc.malloc.tcache_count=0",
-            LD_PRELOAD="libhugetlbfs.so",
-            HUGETLB_MORECORE="yes")
-    do_test("heapshrink",
-            GLIBC_TUNABLES="glibc.malloc.tcache_count=0",
-            LD_PRELOAD="libhugetlbfs.so libheapshrink.so",
-            HUGETLB_MORECORE="yes")
-    do_test("heapshrink",
-            GLIBC_TUNABLES="glibc.malloc.tcache_count=0",
-            LD_PRELOAD="libheapshrink.so",
-            HUGETLB_MORECORE="yes",
-            HUGETLB_MORECORE_SHRINK="yes")
-    do_test("heapshrink",
-            GLIBC_TUNABLES="glibc.malloc.tcache_count=0",
-            LD_PRELOAD="libhugetlbfs.so libheapshrink.so",
-            HUGETLB_MORECORE="yes",
-            HUGETLB_MORECORE_SHRINK="yes")
+    do_test_with_pagesize(system_default_hpage_size, "heapshrink",
+                          GLIBC_TUNABLES="glibc.malloc.tcache_count=0")
+    do_test_with_pagesize(system_default_hpage_size, "heapshrink",
+                          GLIBC_TUNABLES="glibc.malloc.tcache_count=0",
+                          LD_PRELOAD="libheapshrink.so")
+    do_test_with_pagesize(system_default_hpage_size, "heapshrink",
+                          GLIBC_TUNABLES="glibc.malloc.tcache_count=0",
+                          LD_PRELOAD="libhugetlbfs.so",
+                          HUGETLB_MORECORE="yes")
+    do_test_with_pagesize(system_default_hpage_size, "heapshrink",
+                          GLIBC_TUNABLES="glibc.malloc.tcache_count=0",
+                          LD_PRELOAD="libhugetlbfs.so libheapshrink.so",
+                          HUGETLB_MORECORE="yes")
+    do_test_with_pagesize(system_default_hpage_size, "heapshrink",
+                          GLIBC_TUNABLES="glibc.malloc.tcache_count=0",
+                          LD_PRELOAD="libheapshrink.so",
+                          HUGETLB_MORECORE="yes",
+                          HUGETLB_MORECORE_SHRINK="yes")
+    do_test_with_pagesize(system_default_hpage_size, "heapshrink",
+                          GLIBC_TUNABLES="glibc.malloc.tcache_count=0",
+                          LD_PRELOAD="libhugetlbfs.so libheapshrink.so",
+                          HUGETLB_MORECORE="yes",
+                          HUGETLB_MORECORE_SHRINK="yes")
 
     do_test("heap-overflow", HUGETLB_VERBOSE="1", HUGETLB_MORECORE="yes")
 
@@ -663,14 +704,19 @@ def stress_tests():
     # Don't update NRPAGES every time like above because we want to catch the
     # failures that happen when the kernel doesn't release all of the huge pages
     # after a stress test terminates
-    (rc, nr_pages) = free_hpages()
+    nr_pages = {p: free_hpages(p)[1] for p in pagesizes}
 
-    do_test(("mmap-gettest", repr(iterations), repr(nr_pages)))
+    for p in pagesizes:
+        cmd = ("mmap-gettest", repr(iterations), repr(nr_pages[p]))
+        do_test_with_pagesize(p, cmd)
 
-    # mmap-cow needs a hugepages for each thread plus one extra
-    do_test(("mmap-cow", repr(nr_pages-1), repr(nr_pages)))
+    for p in pagesizes:
+        # mmap-cow needs a hugepage for each thread plus one extra
+        cmd = ("mmap-cow", repr(nr_pages[p]-1), repr(nr_pages[p]))
+        do_test_with_pagesize(p, cmd)
 
     (rc, tot_pages) = total_hpages()
+    nr_pages = nr_pages[system_default_hpage_size]
     limit = system_default_hpage_size * tot_pages
     threads = 10	# Number of threads for shm-fork
 
@@ -678,7 +724,7 @@ def stress_tests():
     # This is to catch off-by-ones or races in the kernel allocated that
     # can make allocating all hugepages a problem
     if nr_pages > 1:
-        do_shm_test(("shm-fork", repr(threads), repr(nr_pages / 2)), limit)
+        do_shm_test(("shm-fork", repr(threads), repr(nr_pages // 2)), limit)
     do_shm_test(("shm-fork", repr(threads), repr(nr_pages)), limit)
 
     do_shm_test(("shm-getraw", repr(nr_pages), "/dev/full"), limit)
@@ -686,17 +732,17 @@ def stress_tests():
     do_test("fallocate_stress.sh")
 
 def print_help():
-    print "Usage: %s [options]" % sys.argv[0]
-    print "Options:"
-    print "  -v	\t Verbose output."
-    print "  -V	\t Highly verbose output."
-    print "  -f	\t Force all tests."
-    print "  -t <set> 	 Run test set, allowed are func and stress."
-    print "  -b <wordsize>  Define wordsizes to be used. "
-    print "  -p <pagesize>  Define the page sizes to be used."
-    print "  -c	\t Do a paranoid pool check."
-    print "  -l	\t Use custom ld scripts."
-    print "  -h	\t This help."
+    print("Usage: %s [options]" % sys.argv[0])
+    print("Options:")
+    print("  -v	\t Verbose output.")
+    print("  -V	\t Highly verbose output.")
+    print("  -f	\t Force all tests.")
+    print("  -t <set> 	 Run test set, allowed are func and stress.")
+    print("  -b <wordsize>  Define wordsizes to be used. ")
+    print("  -p <pagesize>  Define the page sizes to be used.")
+    print("  -c	\t Do a paranoid pool check.")
+    print("  -l	\t Use custom ld scripts.")
+    print("  -h	\t This help.")
     sys.exit(0)
 
 def main():
@@ -712,8 +758,8 @@ def main():
 
     try:
         opts, args = getopt.getopt(sys.argv[1:], "vVft:b:p:c:lh")
-    except getopt.GetoptError, err:
-        print str(err)
+    except getopt.GetoptError as err:
+        print(str(err))
         sys.exit(1)
     for opt, arg in opts:
        if opt == "-v":
@@ -742,8 +788,8 @@ def main():
     if len(pagesizes) == 0: pagesizes = get_pagesizes()
 
     if len(pagesizes) == 0:
-        print "Unable to find available page sizes, are you sure hugetlbfs"
-        print "is mounted and there are available huge pages?"
+        print("Unable to find available page sizes, are you sure hugetlbfs")
+        print("is mounted and there are available huge pages?")
         return 1
 
     setup_env(env_override, env_defaults)
@@ -751,8 +797,8 @@ def main():
 
     (rc, system_default_hpage_size) = hpage_size()
     if rc != 0:
-        print "Unable to find system default hugepage size."
-        print "Is hugepage supported included in this kernel?"
+        print("Unable to find system default hugepage size.")
+        print("Is hugepage supported included in this kernel?")
         return 1
 
     check_hugetlbfs_path()
