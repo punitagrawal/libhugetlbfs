@@ -1,3 +1,11 @@
+libhugetlbfs (2.22-1) unstable; urgency=medium
+
+  * New upstream version 2.22
+  * Update to python3 dependency (Closes: #936874)
+  * Update debhelper compat version to 12
+
+ -- Punit Agrawal <punit@debian.org>  Mon, 16 Sep 2019 06:57:13 +0900
+
 libhugetlbfs (2.21-4) unstable; urgency=medium
 
   * Correct version of Breaks+Replaces tags
