@@ -2,7 +2,7 @@ Source: libhugetlbfs
 Section: libs
 Priority: optional
 Maintainer: Punit Agrawal <punit@debian.org>
-Build-Depends: debhelper (>= 10),
+Build-Depends: debhelper (>= 12),
  python3-minimal, libpython3-stdlib
 Standards-Version: 4.4.0
 Homepage: https://github.com/libhugetlbfs/libhugetlbfs
