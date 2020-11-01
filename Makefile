@@ -111,7 +111,14 @@ ELF32 = elf_s390
 TMPLIB32 = lib
 CUSTOM_LDSCRIPTS = no
 else
+ifeq ($(ARCH),riscv64)
+CC64 = $(CC)
+ELF64 = elf_riscv64
+TMPLIB64 = lib64
+CUSTOM_LDSCRIPTS = no
+else
 $(error "Unrecognized architecture ($(ARCH))")
+endif
 endif
 endif
 endif
@@ -169,9 +176,10 @@ ifeq ($(CUSTOM_LDSCRIPTS),yes)
 TEST_LDSCRIPTS = -l
 endif
 
-# If TMPLIB64 is set, then sure we are not resolving LIB32 and LIB64 to the
-# same place
+# If building for both 32- and 64-bit, then make sure we are not resolving
+# LIB32 and LIB64 to the same place
 ifdef TMPLIB64
+ifneq ($(BUILDTYPE),NATIVEONLY)
 
 REALLIB32 = $(realpath $(PREFIX)/$(LIB32))
 REALLIB64 = $(realpath $(PREFIX)/$(LIB64))
@@ -182,6 +190,7 @@ endif
 endif
 
 endif
+endif
 
 HEADERDIR = $(PREFIX)/include
 LIBDIR32 = $(PREFIX)/$(LIB32)
@@ -190,10 +199,11 @@ LDSCRIPTDIR = $(PREFIX)/share/libhugetlbfs/ldscripts
 BINDIR = $(PREFIX)/share/libhugetlbfs
 EXEDIR = $(PREFIX)/bin
 DOCDIR = $(PREFIX)/share/doc/libhugetlbfs
-MANDIR1 = $(PREFIX)/share/man/man1
-MANDIR3 = $(PREFIX)/share/man/man3
-MANDIR7 = $(PREFIX)/share/man/man7
-MANDIR8 = $(PREFIX)/share/man/man8
+MANDIR = $(PREFIX)/share/man
+MANDIR1 = $(MANDIR)/man1
+MANDIR3 = $(MANDIR)/man3
+MANDIR7 = $(MANDIR)/man7
+MANDIR8 = $(MANDIR)/man8
 
 ifdef LIB32
 LIBPATHS += -DLIB32='"$(LIB32)"' -DLIBDIR32='"$(LIBDIR32)"'
