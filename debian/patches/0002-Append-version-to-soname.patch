@@ -7,18 +7,18 @@ Subject: Append version to soname
  1 file changed, 3 insertions(+), 2 deletions(-)
 
 diff --git a/Makefile b/Makefile
-index ba8e4a8..da318a6 100644
+index bb902d3..28ddbcf 100644
 --- a/Makefile
 +++ b/Makefile
 @@ -24,6 +24,7 @@ SOURCE += *.c *.lds Makefile
  NODEPTARGETS=<version.h> <clean>
  
- REL_VERSION=2.21
+ REL_VERSION=2.23
 +SOVERSION=0
  
  INSTALL = install
  
-@@ -308,11 +309,11 @@ obj64/libhugetlbfs.a: $(LIBOBJS64)
+@@ -318,11 +319,11 @@ obj64/libhugetlbfs.a: $(LIBOBJS64)
  
  obj32/libhugetlbfs.so: $(LIBOBJS32)
  	@$(VECHO) LD32 "(shared)" $@
