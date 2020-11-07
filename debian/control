@@ -11,7 +11,7 @@ Vcs-Browser: https://github.com/punitagrawal/libhugetlbfs.git
 
 Package: libhugetlbfs-dev
 Section: libdevel
-Architecture: amd64 arm64 armhf armel i386 ia64 ppc64el s390x powerpc ppc64 sparc64
+Architecture: amd64 arm64 armhf armel i386 ia64 ppc64el s390x powerpc ppc64 riscv64 sparc64
 Multi-Arch: same
 Depends: ${misc:Depends},
  libhugetlbfs0 (= ${binary:Version})
@@ -28,7 +28,7 @@ Description: Development files to build programs using libhugetlbfs
  This package ships the library development files.
 
 Package: libhugetlbfs0
-Architecture: amd64 arm64 armhf armel i386 ia64 ppc64el s390x powerpc ppc64 sparc64
+Architecture: amd64 arm64 armhf armel i386 ia64 ppc64el s390x powerpc ppc64 riscv64 sparc64
 Multi-Arch: same
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Preload library to back program memory with hugepages
@@ -43,7 +43,7 @@ Description: Preload library to back program memory with hugepages
 
 Package: libhugetlbfs-bin
 Section: utils
-Architecture: amd64 arm64 armhf armel i386 ia64 ppc64el s390x powerpc ppc64 sparc64
+Architecture: amd64 arm64 armhf armel i386 ia64 ppc64el s390x powerpc ppc64 riscv64 sparc64
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Breaks: libhugetlbfs0 (<< 2.21-2)
 Replaces: libhugetlbfs0 (<< 2.21-2)
