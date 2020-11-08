@@ -1,3 +1,9 @@
+libhugetlbfs (2.23-3) unstable; urgency=medium
+
+  * Update patches for new upstream release 2.23
+
+ -- Punit Agrawal <punit@debian.org>  Sun, 08 Nov 2020 09:03:51 +0900
+
 libhugetlbfs (2.23-2) unstable; urgency=medium
 
   * Enable package for riscv64
