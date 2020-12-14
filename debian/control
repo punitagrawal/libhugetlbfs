@@ -54,5 +54,10 @@ Description: Tools to ease use of hugetlbfs
  can use huge pages to fulfill malloc() requests without being
  recompiled by using LD_PRELOAD.
  .
- The package provies several userspace tools to help with huge page
- usability, environment setup, and control.
+ The package provies the following userspace tools to help with huge page
+ usability, environment setup, and control:
+ .
+ hugeadm: Configure the system huge page pools.
+ hugectl: Control policy for backing text, data and malloc() with hugepages.
+ hugeedit: Set default policy for backing text and data with hugepages.
+ pagesize: Print supported system page sizes.
