@@ -1,3 +1,9 @@
+libhugetlbfs (2.23-5) unstable; urgency=medium
+
+  * Disable malloc if __morecore hook not available (Closes: #1017324)
+
+ -- Punit Agrawal <punit@debian.org>  Sun, 11 Sep 2022 23:39:38 +0100
+
 libhugetlbfs (2.23-4) unstable; urgency=medium
 
   [ Simon Josefsson ]
