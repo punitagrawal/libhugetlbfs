@@ -55,12 +55,15 @@ def bash(cmd):
 def snapshot_pool_state():
     l = []
     for d in os.listdir("/sys/kernel/mm/hugepages"):
-        substate = [(f, int(open("/sys/kernel/mm/hugepages/%s/%s" % (d, f)).read()))
-                    for f in os.listdir("/sys/kernel/mm/hugepages/%s" % d)]
+        entries = os.listdir("/sys/kernel/mm/hugepages/%s" % d)
+        if "demote" in entries:
+            entries.remove("demote")
+        substate = [(f, int(open("/sys/kernel/mm/hugepages/%s/%s" % (d, f)).read().replace("kB","")))
+                    for f in entries]
         l.append((d, tuple(substate)))
     return tuple(l)
 
-def run_test_prog(bits, pagesize, cmd, **env):
+def run_test_prog(bits, pagesize, cmd, output='stdout', **env):
     if paranoid_pool_check:
         beforepool = snapshot_pool_state()
         print("Pool state: %s" % str(beforepool))
@@ -73,15 +76,17 @@ def run_test_prog(bits, pagesize, cmd, **env):
         % (bits, bits, local_env.get("LD_LIBRARY_PATH", ""))
     local_env["HUGETLB_DEFAULT_PAGE_SIZE"] = repr(pagesize)
 
+    popen_args = {'env' : local_env, output : subprocess.PIPE}
+
     try:
-        p = subprocess.Popen(cmd, env=local_env, stdout=subprocess.PIPE)
+        p = subprocess.Popen(cmd, **popen_args)
         rc = p.wait()
     except KeyboardInterrupt:
         # Abort and mark this a strange test result
         return (None, "")
     except OSError as e:
         return (-e.errno, "")
-    out = p.stdout.read().decode().strip()
+    out = getattr(p, output).read().decode().strip()
 
     if paranoid_pool_check:
         afterpool = snapshot_pool_state()
@@ -309,6 +314,33 @@ def check_linkhuge_tests():
             okbits.add(bits)
     return okbits
 
+def check_morecore_disabled():
+    """
+    Check if support for morecore is available.
+
+    Newer glibc versions (>= 2.34) removed the __morecore malloc hook, so tests
+    relying on that functionality will not work as expected, and should be
+    disabled.
+    """
+    global morecore_disabled, wordsizes, pagesizes
+
+    # Quick and dirty way to get a word and page size. Which one doesn't really
+    # matter in this case.
+    for wsz in wordsizes:
+        b = wsz
+        break
+    for psz in pagesizes:
+        p = psz
+        break
+
+    # Run an arbitrary program and check stderr for the "morecore disabled"
+    # message
+    (rc, out) = run_test_prog(b, p, "gethugepagesize", output='stderr',
+                              HUGETLB_MORECORE="yes",
+                              HUGETLB_VERBOSE="3")
+
+    morecore_disabled = "Not setting up morecore" in out
+
 def print_cmd(pagesize, bits, cmd, env):
     if env:
         print(' '.join(['%s=%s' % (k, v) for k, v in env.items()]), end=" ")
@@ -357,14 +389,17 @@ def skip_test(pagesize, bits, cmd, **env):
     print_cmd(pagesize, bits, cmd, env)
     print("SKIPPED")
 
-def do_test(cmd, bits=None, **env):
+def do_test(cmd, bits=None, skip=False, **env):
     """
     Run a test case, testing each page size and each indicated word size.
     """
     if bits == None: bits = wordsizes
     for p in pagesizes:
         for b in (set(bits) & wordsizes_by_pagesize[p]):
-            run_test(p, b, cmd, **env)
+            if skip:
+                skip_test(p, b, cmd, **env)
+            else:
+                run_test(p, b, cmd, **env)
 
 def do_test_with_rlimit(rtype, limit, cmd, bits=None, **env):
     """
@@ -375,7 +410,7 @@ def do_test_with_rlimit(rtype, limit, cmd, bits=None, **env):
     do_test(cmd, bits, **env)
     resource.setrlimit(rtype, oldlimit)
 
-def do_test_with_pagesize(pagesize, cmd, bits=None, **env):
+def do_test_with_pagesize(pagesize, cmd, bits=None, skip=False, **env):
     """
     Run a test case, testing with a specified huge page size and
     each indicated word size.
@@ -383,7 +418,10 @@ def do_test_with_pagesize(pagesize, cmd, bits=None, **env):
     if bits == None:
         bits = wordsizes
     for b in (set(bits) & wordsizes_by_pagesize[pagesize]):
-        run_test(pagesize, b, cmd, **env)
+        if skip:
+            skip_test(pagesize, b, cmd, **env)
+        else:
+            run_test(pagesize, b, cmd, **env)
 
 def do_elflink_test(cmd, **env):
     """
@@ -533,7 +571,7 @@ def functional_tests():
     """
     Run the set of functional tests.
     """
-    global linkhuge_wordsizes
+    global linkhuge_wordsizes, morecore_disabled
 
     # Kernel background tests not requiring hugepage support
     do_test("zero_filesize_segment")
@@ -598,19 +636,24 @@ def functional_tests():
     do_test("fork-cow")
     do_test("direct")
     do_test_with_pagesize(system_default_hpage_size, "malloc")
+
     do_test_with_pagesize(system_default_hpage_size, "malloc",
+                          skip=morecore_disabled,
                           LD_PRELOAD="libhugetlbfs.so",
                           HUGETLB_MORECORE="yes")
     do_test_with_pagesize(system_default_hpage_size, "malloc",
+                          skip=morecore_disabled,
                           LD_PRELOAD="libhugetlbfs.so",
                           HUGETLB_MORECORE="yes",
                           HUGETLB_RESTRICT_EXE="unknown:none")
     do_test_with_pagesize(system_default_hpage_size, "malloc",
+                          skip=morecore_disabled,
                           LD_PRELOAD="libhugetlbfs.so",
                           HUGETLB_MORECORE="yes",
                           HUGETLB_RESTRICT_EXE="unknown:malloc")
     do_test_with_pagesize(system_default_hpage_size, "malloc_manysmall")
     do_test_with_pagesize(system_default_hpage_size, "malloc_manysmall",
+                          skip=morecore_disabled,
                           LD_PRELOAD="libhugetlbfs.so",
                           HUGETLB_MORECORE="yes")
 
@@ -630,26 +673,32 @@ def functional_tests():
     do_test_with_pagesize(system_default_hpage_size, "heapshrink",
                           GLIBC_TUNABLES="glibc.malloc.tcache_count=0",
                           LD_PRELOAD="libheapshrink.so")
+
     do_test_with_pagesize(system_default_hpage_size, "heapshrink",
+                          skip=morecore_disabled,
                           GLIBC_TUNABLES="glibc.malloc.tcache_count=0",
                           LD_PRELOAD="libhugetlbfs.so",
                           HUGETLB_MORECORE="yes")
     do_test_with_pagesize(system_default_hpage_size, "heapshrink",
+                          skip=morecore_disabled,
                           GLIBC_TUNABLES="glibc.malloc.tcache_count=0",
                           LD_PRELOAD="libhugetlbfs.so libheapshrink.so",
                           HUGETLB_MORECORE="yes")
     do_test_with_pagesize(system_default_hpage_size, "heapshrink",
+                          skip=morecore_disabled,
                           GLIBC_TUNABLES="glibc.malloc.tcache_count=0",
                           LD_PRELOAD="libheapshrink.so",
                           HUGETLB_MORECORE="yes",
                           HUGETLB_MORECORE_SHRINK="yes")
     do_test_with_pagesize(system_default_hpage_size, "heapshrink",
+                          skip=morecore_disabled,
                           GLIBC_TUNABLES="glibc.malloc.tcache_count=0",
                           LD_PRELOAD="libhugetlbfs.so libheapshrink.so",
                           HUGETLB_MORECORE="yes",
                           HUGETLB_MORECORE_SHRINK="yes")
 
-    do_test("heap-overflow", HUGETLB_VERBOSE="1", HUGETLB_MORECORE="yes")
+    do_test("heap-overflow", skip=morecore_disabled, HUGETLB_VERBOSE="1",
+            HUGETLB_MORECORE="yes")
 
     # Run the remapping tests' up-front checks
     linkhuge_wordsizes = check_linkhuge_tests()
@@ -683,8 +732,11 @@ def functional_tests():
     # Test overriding of shmget()
     do_shm_test("shmoverride_linked")
     do_shm_test("shmoverride_linked", HUGETLB_SHM="yes")
-    do_shm_test("shmoverride_linked_static")
-    do_shm_test("shmoverride_linked_static", HUGETLB_SHM="yes")
+
+    #Since we use dlsym to hijack shmget, we can't use -static when using shm huge,
+    #as it will cause an error: 'ERROR: RTLD_NEXT used in code not dynamically loaded.
+    #do_shm_test("shmoverride_linked_static")
+    #do_shm_test("shmoverride_linked_static", HUGETLB_SHM="yes")
     do_shm_test("shmoverride_unlinked", LD_PRELOAD="libhugetlbfs.so")
     do_shm_test("shmoverride_unlinked", LD_PRELOAD="libhugetlbfs.so", HUGETLB_SHM="yes")
 
@@ -747,7 +799,7 @@ def print_help():
 
 def main():
     global wordsizes, pagesizes, dangerous, paranoid_pool_check, system_default_hpage_size
-    global custom_ldscripts
+    global custom_ldscripts, morecore_disabled
     testsets = set()
     env_override = {"QUIET_TEST": "1", "HUGETLBFS_MOUNTS": "",
                     "HUGETLB_ELFMAP": None, "HUGETLB_MORECORE": None}
@@ -802,6 +854,7 @@ def main():
         return 1
 
     check_hugetlbfs_path()
+    check_morecore_disabled()
 
     if "func" in testsets: functional_tests()
     if "stress" in testsets: stress_tests()
