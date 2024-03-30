@@ -3,14 +3,14 @@ Date: Sun, 3 Mar 2019 08:40:03 +0900
 Subject: Append version to soname
 
 ---
- Makefile | 5 +++--
+ Makefile.in | 5 +++--
  1 file changed, 3 insertions(+), 2 deletions(-)
 
-diff --git a/Makefile b/Makefile
-index bb902d3..28ddbcf 100644
---- a/Makefile
-+++ b/Makefile
-@@ -24,6 +24,7 @@ SOURCE += *.c *.lds Makefile
+diff --git a/Makefile.in b/Makefile.in
+index 4c12a56..8cc9b12 100644
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -28,6 +28,7 @@ SOURCE += *.c *.lds Makefile
  NODEPTARGETS=<version.h> <clean>
  
  REL_VERSION=2.23
@@ -18,7 +18,7 @@ index bb902d3..28ddbcf 100644
  
  INSTALL = install
  
-@@ -318,11 +319,11 @@ obj64/libhugetlbfs.a: $(LIBOBJS64)
+@@ -329,11 +330,11 @@ obj64/libhugetlbfs.a: $(LIBOBJS64)
  
  obj32/libhugetlbfs.so: $(LIBOBJS32)
  	@$(VECHO) LD32 "(shared)" $@
